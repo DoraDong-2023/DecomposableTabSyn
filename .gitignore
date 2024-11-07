@@ -163,3 +163,7 @@ cython_debug/
 
 /test*
 /src/*db
+/src/*.png
+/src/*.json
+/src/saves
+/src/plots
