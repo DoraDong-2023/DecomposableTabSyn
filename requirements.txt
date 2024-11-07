@@ -1,0 +1,9 @@
+transformers
+torch
+fire
+sdv
+sdmetrics
+pandas
+sqlalchemy
+scikit-learn
+numpy

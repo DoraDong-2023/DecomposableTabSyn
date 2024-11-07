@@ -18,7 +18,7 @@ class TableSynthesis(BaseSynthesis):
 
 if __name__ == "__main__":
     from sdv.datasets.demo import download_demo
-    real_data, metadata = download_demo(modality='single_table', dataset_name='fake_hotel_guests')
+    real_data, metadata = download_demo(modality='single_table', dataset_name='covtype')
     synthesizer = TableSynthesis(metadata)
     synthesizer.fit(real_data)
     synthetic_data = synthesizer.sample(5)
