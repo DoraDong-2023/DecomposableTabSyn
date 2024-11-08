@@ -315,63 +315,120 @@ class NFDecomposition(BaseDecomposition):
         """Remove tables that are completely contained within other tables."""
         non_redundant_tables = []
         seen_column_sets = set()
-        
         # Sort tables by number of columns (descending) to prefer larger tables
         tables = sorted(tables, key=lambda x: len(x.columns), reverse=True)
-        
         for table in tables:
             # Convert columns to frozenset for hashable comparison
             columns = frozenset(table.columns)
-            
             # Check if this combination of columns is new
             if columns not in seen_column_sets:
                 # Check if the table's data is unique
                 table_hash = hash(str(table.values.tolist()))
                 is_unique = True
-                
                 for existing_table in non_redundant_tables:
                     if (table.columns.tolist() == existing_table.columns.tolist() and 
                         table.values.tolist() == existing_table.values.tolist()):
                         is_unique = False
                         break
-                
                 if is_unique:
                     seen_column_sets.add(columns)
                     non_redundant_tables.append(table)
-        
         return non_redundant_tables
 
+class TruncateDecomposition(BaseDecomposition):
+    def __init__(self, row_fraction: float, col_fraction: float):
+        """
+        Initialize with row and column fractions.
+        :param row_fraction: Fraction for row partitioning (e.g., 0.5 for half, resulting in 2 parts).
+        :param col_fraction: Fraction for column partitioning (e.g., 0.5 for half, resulting in 2 parts).
+        """
+        self.row_fraction = row_fraction
+        self.col_fraction = col_fraction
+
+    def split(self, data: pd.DataFrame):
+        """
+        Split the DataFrame into four partitions:
+        - First half of rows with first half of columns
+        - First half of rows with second half of columns
+        - Second half of rows with first half of columns
+        - Second half of rows with second half of columns
+        """
+        num_rows, num_columns = data.shape
+        row_midpoint = int(num_rows * self.row_fraction)
+        col_midpoint = int(num_columns * self.col_fraction)
+
+        # Create 4 parts based on row and column midpoints
+        part1 = data.iloc[:row_midpoint, :col_midpoint]    # Top-left
+        part2 = data.iloc[:row_midpoint, col_midpoint:]    # Top-right
+        part3 = data.iloc[row_midpoint:, :col_midpoint]    # Bottom-left
+        part4 = data.iloc[row_midpoint:, col_midpoint:]    # Bottom-right
+
+        return [part1, part2, part3, part4]
+
+    def join(self, data_parts: list):
+        """
+        Recombine the four pieces back into the original DataFrame structure.
+        """
+        # Concatenate columns for each row part
+        top = pd.concat([data_parts[0], data_parts[1]], axis=1)
+        bottom = pd.concat([data_parts[2], data_parts[3]], axis=1)
+        
+        # Concatenate rows to restore original structure
+        return pd.concat([top, bottom], axis=0)
+
 if __name__ == "__main__":
-    from .dataloader import DemoDataLoader
-    real_data, _ = DemoDataLoader(dataset_name='covtype').load_data()
-    data = real_data.sample(100)
-    #### Test BayesianDecomposition
-    decomposer = BayesianDecomposition()
-    decomposer.split(data)
-    joined_data = decomposer.join(data, 100)
-    print("\nJoined Data:")
-    print(joined_data)
+    test_mode = 'TruncateDecomposition'
+    if test_mode == 'BayesianDecomposition':
+        from .dataloader import DemoDataLoader
+        real_data, _ = DemoDataLoader(dataset_name='covtype').load_data()
+        data = real_data.sample(100)
+        #### Test BayesianDecomposition
+        decomposer = BayesianDecomposition()
+        decomposer.split(data)
+        joined_data = decomposer.join(data, 100)
+        print("\nJoined Data:")
+        print(joined_data)
     
     #### Test NFDecomposition
-    data = pd.DataFrame({
-        'StudentID': [1, 2, 3, 1, 2],
-        'CourseID': ['CS101', 'CS102', 'CS101', 'CS102', 'CS101'],
-        'StudentName': ['Alice', 'Bob', 'Charlie', 'Alice', 'Bob'],
-        'CourseTitle': ['Python', 'Java', 'Python', 'Java', 'Python'],
-        'Grade': ['A', 'B', 'C', 'A', 'B']
-    })
-    norm = NFDecomposition(data)
-    table_1nf = norm.to_1nf()
-    print("Table in 1NF:")
-    print(table_1nf)
-    tables_2nf = norm.to_2nf()
-    print("\nTables in 2NF:")
-    for i, table in enumerate(tables_2nf):
-        print(f"\nTable {i+1}:")
-        print(table)
-    tables_3nf = norm.to_3nf()
-    print("\nTables in 3NF:")
-    for i, table in enumerate(tables_3nf):
-        print(f"\nTable {i+1}:")
-        print(table)
+    if test_mode == 'NFDecomposition':
+        data = pd.DataFrame({
+            'StudentID': [1, 2, 3, 1, 2],
+            'CourseID': ['CS101', 'CS102', 'CS101', 'CS102', 'CS101'],
+            'StudentName': ['Alice', 'Bob', 'Charlie', 'Alice', 'Bob'],
+            'CourseTitle': ['Python', 'Java', 'Python', 'Java', 'Python'],
+            'Grade': ['A', 'B', 'C', 'A', 'B']
+        })
+        norm = NFDecomposition(data)
+        table_1nf = norm.to_1nf()
+        print("Table in 1NF:")
+        print(table_1nf)
+        tables_2nf = norm.to_2nf()
+        print("\nTables in 2NF:")
+        for i, table in enumerate(tables_2nf):
+            print(f"\nTable {i+1}:")
+            print(table)
+        tables_3nf = norm.to_3nf()
+        print("\nTables in 3NF:")
+        for i, table in enumerate(tables_3nf):
+            print(f"\nTable {i+1}:")
+            print(table)
+    
+    if test_mode == 'TruncateDecomposition':
+        # Sample data (100 rows, 9 columns)
+        data = pd.DataFrame(np.arange(900).reshape(100, 9), columns=[f"Col{i}" for i in range(1, 10)])
+
+        # Initialize fractional truncation with 1/2 for both rows and columns
+        frac_trunc_decomposer = TruncateDecomposition(0.5, 0.5)
+        truncated_pieces = frac_trunc_decomposer.split(data)
+        
+        print("Truncated Pieces:")
+        for i, piece in enumerate(truncated_pieces):
+            print(f"\nPiece {i+1}:")
+            print(piece)
+
+        # Join the pieces back together
+        joined_table = frac_trunc_decomposer.join(truncated_pieces)
+        print("\nJoined Table:")
+        print(joined_table)
+
 
