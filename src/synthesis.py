@@ -7,6 +7,7 @@ from sdv.single_table import (
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 class BaseSynthesis:
     def fit(self, data: pd.DataFrame):
@@ -78,10 +79,11 @@ if __name__ == "__main__":
             # test the speed of different synthesizers on fitting and sampling
             ds_results = {}
             for synthesizer_name in TableSynthesizer.synthesizer_configs:
+                samples_path = Path("saves") / dataset_name / f"{synthesizer_name}_samples.csv"
+                quality_report_path = Path("saves") / dataset_name / f"{synthesizer_name}_quality_report.pkl"
                 if synthesizer_name in results.get(dataset_name, {}):
                     ds_results.append(results[dataset_name][synthesizer_name])
                     continue
-                
                 save_path = Path("saves") / dataset_name / f"{synthesizer_name}.pkl"
                 fit_time_path = Path("saves") / dataset_name / f"{synthesizer_name}_fit_time.txt"
                 if save_path.exists():
@@ -112,13 +114,36 @@ if __name__ == "__main__":
                 sample_time_per_row = sample_time / num_samples
                 print(f"Time taken to generate {num_samples} samples: {end - start:.2f}s")
                 print(f"Average time taken to generate a sample: {(end - start) * 1000 / num_samples:.2f}ms")
+                # save samples
+                samples_path.parent.mkdir(parents=True, exist_ok=True)
+                synthetic_data.to_csv(samples_path, index=False)
+                
+                ## Quality Report
+                from sdmetrics.reports.single_table import QualityReport
+                quality_report = QualityReport()
+                quality_report.generate(data, synthetic_data, list(metadata.tables.values())[0].to_dict())
+                score = quality_report.get_score()
+                properties = quality_report.get_properties() # dataframe
+                property_score = {k: v for k, v in zip(properties['Property'], properties['Score'])}
+                details = defaultdict(dict)
+                for k in properties['Property']:
+                    cur_details = quality_report.get_details(property_name=k)
+                    for index, row in cur_details.iterrows():
+                        details[row.iloc[1]][row.iloc[0]] = row.iloc[2]
+                    fig = quality_report.get_visualization(property_name=k)
+                    fig.write_image(quality_report_path.parent / f"{quality_report_path.stem}_{k}.png")
                 
                 ds_results[synthesizer_name] = {
                     "synthesizer_name": synthesizer_name,
                     "fit_time": fit_time,
                     "num_samples": num_samples,
                     f"sample_time": sample_time,
-                    "sample_time_per_row": sample_time_per_row
+                    "sample_time_per_row": sample_time_per_row,
+                    "quality_report": {
+                        "score": score, # overall score
+                        "properties": property_score,
+                        "details": details
+                    }
                 }
             results[dataset_name] = {
                 "num_columns": num_columns,
@@ -195,14 +220,15 @@ if __name__ == "__main__":
         ds_results = dataset_results["results"]
         print(f"Results for {dataset_name} with {num_columns} columns:")
         table = pt.PrettyTable()
-        table.field_names = ["Synthesizer", "Fit Time (s)", "Num Samples", "Sample Time (1k samples)", "Sample Time (per row)"]
+        table.field_names = ["Synthesizer", "Fit Time (s)", "Num Samples", "Sample Time (1k samples)", "Sample Time (per row)", "Quality Score"]
         for result in ds_results.values():
             table.add_row([
                 result["synthesizer_name"],
                 result["fit_time"],
                 result["num_samples"],
                 result["sample_time"],
-                result["sample_time_per_row"]
+                result["sample_time_per_row"],
+                result["quality_report"]["score"]
             ])
         print(table)    
     

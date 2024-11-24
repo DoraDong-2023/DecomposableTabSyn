@@ -7,6 +7,7 @@ from sdv.single_table import (
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 class BaseSynthesis:
     def fit(self, data: pd.DataFrame):
@@ -160,6 +161,8 @@ if __name__ == "__main__":
         print('='*10)
         synthesizer_name = 'GaussianCopulaSynthesizer'
         assert synthesizer_name not in results.get(dataset_name, {})
+        samples_path = Path("saves") / dataset_name / f"{synthesizer_name}_samples.csv"
+        quality_report_path = Path("saves") / dataset_name / f"{synthesizer_name}_quality_report.pkl"
         save_path = Path("saves") / dataset_name / f"{synthesizer_name}.pkl"
         fit_time_path = Path("saves") / dataset_name / f"{synthesizer_name}_fit_time.txt"
         if False: #save_path.exists():
@@ -189,7 +192,31 @@ if __name__ == "__main__":
         print(f"Average time taken to generate a sample: {(sample_time) * 1000 / num_samples:.2f}ms")
         print('='*10)
         
+        # save samples
+        samples_path.parent.mkdir(parents=True, exist_ok=True)
+        synthetic_data.to_csv(samples_path, index=False)
+        
+        ## Quality Report
+        from sdmetrics.reports.single_table import QualityReport
+        quality_report = QualityReport()
+        quality_report.generate(data, synthetic_data, list(metadata.tables.values())[0].to_dict())
+        score = quality_report.get_score()
+        properties = quality_report.get_properties() # dataframe
+        property_score = {k: v for k, v in zip(properties['Property'], properties['Score'])}
+        details = defaultdict(dict)
+        for k in properties['Property']:
+            cur_details = quality_report.get_details(property_name=k)
+            for index, row in cur_details.iterrows():
+                details[row.iloc[1]][row.iloc[0]] = row.iloc[2]
+            fig = quality_report.get_visualization(property_name=k)
+            fig.write_image(quality_report_path.parent / f"{quality_report_path.stem}_{k}.png")
+        
         # another synthesizer
+        synthesizer_name = 'DecompositionSynthesizer'
+        samples_path = Path("saves") / dataset_name / f"{synthesizer_name}_samples.csv"
+        quality_report_path = Path("saves") / dataset_name / f"{synthesizer_name}_quality_report.pkl"
+        save_path = Path("saves") / dataset_name / f"{synthesizer_name}.pkl"
+        fit_time_path = Path("saves") / dataset_name / f"{synthesizer_name}_fit_time.txt"
         decomposed_synthesizer = DecompositionSynthesizer(metadata, row_fraction=0.5, col_fraction=0.5)
         start = time.time()
         decomposed_synthesizer.fit(data)
@@ -204,6 +231,27 @@ if __name__ == "__main__":
         timing_details = decomposed_synthesizer.get_timing_details()
         print(json.dumps(timing_details,indent=4))
         print('='*10)
+        
+        # save samples
+        synthetic_data = decomposed_samples
+        samples_path.parent.mkdir(parents=True, exist_ok=True)
+        synthetic_data.to_csv(samples_path, index=False)
+        
+        ## Quality Report
+        from sdmetrics.reports.single_table import QualityReport
+        quality_report = QualityReport()
+        quality_report.generate(data, synthetic_data, list(metadata.tables.values())[0].to_dict())
+        score = quality_report.get_score()
+        properties = quality_report.get_properties() # dataframe
+        property_score = {k: v for k, v in zip(properties['Property'], properties['Score'])}
+        details = defaultdict(dict)
+        for k in properties['Property']:
+            cur_details = quality_report.get_details(property_name=k)
+            for index, row in cur_details.iterrows():
+                details[row.iloc[1]][row.iloc[0]] = row.iloc[2]
+            fig = quality_report.get_visualization(property_name=k)
+            fig.write_image(quality_report_path.parent / f"{quality_report_path.stem}_{k}.png")
+        
 
     row_sizes = list(range(1000, 11000, 1000))
     fit_times_original = []
