@@ -305,7 +305,7 @@ if __name__ == "__main__":
         synthesizers=synthesizer_classes,
         num_samples=1000,
         row_sizes=row_sizes,
-        save_path="benchmark_results.xlsx",
+        save_path="benchmark_results",
         numerical_only=False
     )
     synthesizer_classes = {
