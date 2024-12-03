@@ -8,6 +8,28 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
+import warnings
+warnings.filterwarnings("ignore")
+import time, json
+import prettytable as pt
+from tqdm import tqdm
+from pathlib import Path
+from sdv.datasets.demo import download_demo, get_available_demos
+from utils import plot_model_scaling
+
+# https://docs.sdv.dev/sdmetrics/metrics/metrics-glossary
+from sdmetrics.single_table import (
+    BoundaryAdherence, KSComplement, TVComplement, TableStructure, NewRowSynthesis
+)
+from sdmetrics.single_column import (
+    StatisticSimilarity, SequenceLengthSimilarity, RangeCoverage, MissingValueSimilarity, KeyUniqueness, CategoryCoverage
+)
+from sdmetrics.column_pairs import (
+    ReferentialIntegrity, CorrelationSimilarity, ContingencySimilarity
+)
+from sdv.metadata import SingleTableMetadata
+from sdv.datasets.demo import download_demo
+from sdmetrics.reports.single_table import QualityReport
 
 class BaseSynthesis:
     def fit(self, data: pd.DataFrame):
@@ -44,18 +66,25 @@ class TableSynthesizer(BaseSynthesis):
     def sample(self, num_rows: int) -> pd.DataFrame:
         return self.synthesizer.sample(num_rows)
 
-from decomposition import TruncateDecomposition
+from decomposition import TruncateDecomposition, NMFDecomposition, PCADecomposition, SVDDecomposition, ICADecomposition, FactorAnalysisDecomposition, DictionaryLearningDecomposition
 from sdv.metadata import SingleTableMetadata
 class DecompositionSynthesizer(BaseSynthesis):
-    def __init__(self, metadata, row_fraction=0.5, col_fraction=0.5):
+    def __init__(self, metadata, synthesizer_name="GaussianCopulaSynthesizer", row_fraction=0.5, col_fraction=0.5, decomposer=None, **decomposer_kwargs):
         """
         Initialize with metadata and decomposition parameters.
         """
         self.metadata = metadata
         self.row_fraction = row_fraction
         self.col_fraction = col_fraction
-        self.decomposer = TruncateDecomposition(row_fraction, col_fraction)
+        if not decomposer:
+            self.decomposer = TruncateDecomposition(row_fraction, col_fraction)
+        else:
+            #self.decomposer = NMFDecomposition(n_components=2)
+            self.decomposer = decomposer(**decomposer_kwargs)
         self.synthesizers = []
+        self.synthesizer_name = synthesizer_name
+        self.synthesizer_config = TableSynthesizer.synthesizer_configs.get(synthesizer_name, {})
+        self.synthesizer_class = globals()[synthesizer_name]
 
     def _update_metadata(self, data_part: pd.DataFrame) -> SingleTableMetadata:
         """
@@ -78,7 +107,7 @@ class DecompositionSynthesizer(BaseSynthesis):
         fit_times = []
         for i, part in enumerate(self.data_parts):
             part_metadata = self._update_metadata(part)
-            synthesizer = GaussianCopulaSynthesizer(part_metadata)
+            synthesizer = self.synthesizer_class(part_metadata, **self.synthesizer_config)
             start_time = time.time()
             synthesizer.fit(part)
             fit_time = time.time() - start_time
@@ -131,191 +160,193 @@ class DecompositionSynthesizer(BaseSynthesis):
             "join_time": self.join_time,
         }
 
+
+def evaluate_single_table_metrics(real_data, synthetic_data, metadata):
+    """
+    Evaluate various single-table metrics for real and synthetic data.
+    """
+    # Align columns
+    common_columns = real_data.columns.intersection(synthetic_data.columns)
+    real_data = real_data[common_columns]
+    synthetic_data = synthetic_data[common_columns]
+
+    metrics = {}
+
+    # Single-column metrics
+    for column in common_columns:
+        real_col = real_data[[column]]  # Convert Series to DataFrame
+        synthetic_col = synthetic_data[[column]]  # Convert Series to DataFrame
+
+        if pd.api.types.is_numeric_dtype(real_data[column]):
+            metrics[f'{column}_BoundaryAdherence'] = BoundaryAdherence.compute(real_col, synthetic_col)
+            metrics[f'{column}_KSComplement'] = KSComplement.compute(real_col, synthetic_col)
+            #metrics[f'{column}_RangeCoverage'] = RangeCoverage.compute(real_col, synthetic_col)
+        else:
+            metrics[f'{column}_CategoryCoverage'] = CategoryCoverage.compute(real_col, synthetic_col)
+
+    # Column-pairs metrics
+    if len(common_columns) > 1:
+        for col1, col2 in zip(common_columns[:-1], common_columns[1:]):
+            """if is_constant_column(real_data[col1]) or is_constant_column(real_data[col2]) or \
+                is_constant_column(synthetic_data[col1]) or is_constant_column(synthetic_data[col2]):
+                    #print(f"Skipping CorrelationSimilarity for constant column pair: {col1}, {col2}")
+                    #continue
+                    pass"""
+            metrics[f'{col1}_{col2}_CorrelationSimilarity'] = CorrelationSimilarity.compute(
+                real_data[[col1, col2]],
+                synthetic_data[[col1, col2]],
+                coefficient='Pearson'
+            )
+    # Table-wide metrics
+    metrics['TableStructure'] = TableStructure.compute(real_data, synthetic_data)
+    #metrics['NewRowSynthesis'] = NewRowSynthesis.compute(real_data, synthetic_data, metadata)
+
+    return metrics
+def is_constant_column(column):
+    """
+    Check whether columns are constant
+    """
+    return column.nunique() <= 1
+
+def train_and_evaluate_synthesizer(synthesizer, real_data, metadata, num_samples):
+    start_fit = time.time()
+    synthesizer.fit(real_data)
+    fit_time = time.time() - start_fit
+    print(f"Fitting Time taken: {fit_time:.2f}s")
+    start_sample = time.time()
+    synthetic_data = synthesizer.sample(num_samples)
+    sample_time = time.time() - start_sample
+    print(f"Sampling Time taken: {sample_time:.2f}s")
+    metrics = evaluate_single_table_metrics(real_data, synthetic_data, metadata)
+    return metrics, fit_time, sample_time
+def benchmark_datasets_and_synthesizers(datasets, synthesizers, num_samples=1000, row_sizes=[1000], save_path="results", numerical_only=False):
+    all_results = {}
+    for dataset_name in tqdm(datasets, desc="Datasets"):
+        # Load dataset
+        real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
+        if numerical_only:
+            # Keep only numerical columns
+            real_data = real_data.select_dtypes(include=[np.number])
+            metadata = SingleTableMetadata()
+            metadata.detect_from_dataframe(real_data)
+        num_columns = len(real_data.columns)
+        print(f"Running experiments on {dataset_name} dataset ...")
+        dataset_results = []
+        for num_rows in row_sizes:
+            data = real_data[:num_rows]
+            print(f"Using {num_rows} rows from dataset {dataset_name}")
+            for synthesizer_name, synthesizer_class in synthesizers.items():
+                print(f"Processing dataset {dataset_name} with synthesizer {synthesizer_name} and {num_rows} rows...")
+                try:
+                    # Initialize synthesizer
+                    if synthesizer_name.startswith('Decomposition'):
+                        base_synthesizer_name = synthesizer_name.split('_')[1]
+                        synthesizer = synthesizer_class(metadata, synthesizer_name=base_synthesizer_name)
+                    else:
+                        synthesizer = synthesizer_class(metadata)
+                    # Train and evaluate
+                    metrics, fit_time, sample_time = train_and_evaluate_synthesizer(synthesizer, data, metadata, num_samples)
+                    # Record results
+                    row = {
+                        "Dataset": dataset_name,
+                        "Num Rows": num_rows,
+                        "Synthesizer": synthesizer_name,
+                        "Fit Time (s)": fit_time,
+                        "Sample Time (s)": sample_time,
+                    }
+                    row.update(metrics)  # Add metrics to the row
+                    dataset_results.append(row)
+                except Exception as e:
+                    print(f"Error processing {dataset_name} with {synthesizer_name}: {e}")
+                    continue
+        # Convert results to DataFrame
+        results_df = pd.DataFrame(dataset_results)
+        # Store in dictionary
+        all_results[dataset_name] = results_df
+    # save results to json
+    with open(save_path+'.json', "w") as json_file:
+        json.dump(all_results, json_file, indent=4)
+    # Save results to Excel with multiple sheets
+    """with pd.ExcelWriter(save_path+'.xlsx') as writer:
+        for dataset_name, results_df in all_results.items():
+            sheet_name = dataset_name[:31]  # Excel sheet names can't exceed 31 characters
+            results_df.to_excel(writer, sheet_name=sheet_name, index=False)"""
+    print(f"Results saved to {save_path}")
+
 if __name__ == "__main__":
-    import time
-    import json
-    import prettytable as pt
-    from tqdm import tqdm
-    from pathlib import Path
-    from sdv.datasets.demo import download_demo, get_available_demos
-    from utils import plot_model_scaling
     dataset_names = get_available_demos(modality='single_table')['dataset_name']
     exclude_datasets = ['intrusion']
     dataset_names = [dataset_name for dataset_name in dataset_names if dataset_name not in exclude_datasets]
     # dataset_names = ["ring", "asia", "fake_companies", "census_extended", "insurance", "alarm", "census", "covtype", "news", ]
-    results_file = Path("synthesis_speed_results.json")
-    if False: #results_file.exists():
-        with open(results_file, "r") as f:
-            results = json.load(f)
-    else:
-        results = {}
-        dataset_name = 'covtype'
-        real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
-        num_columns = len(real_data.columns)
-        print(f"Running experiments on {dataset_name} dataset ...")
-        # restric the number of rows to 10000
-        data = real_data[:1000]
-        print(f"Cut down the number of rows to {len(data)} from {len(real_data)} for faster synthesis.")
-        # test the speed of different synthesizers on fitting and sampling
-        ds_results = {}
-        print('='*10)
-        synthesizer_name = 'GaussianCopulaSynthesizer'
-        assert synthesizer_name not in results.get(dataset_name, {})
-        samples_path = Path("saves") / dataset_name / f"{synthesizer_name}_samples.csv"
-        quality_report_path = Path("saves") / dataset_name / f"{synthesizer_name}_quality_report.pkl"
-        save_path = Path("saves") / dataset_name / f"{synthesizer_name}.pkl"
-        fit_time_path = Path("saves") / dataset_name / f"{synthesizer_name}_fit_time.txt"
-        if False: #save_path.exists():
-            synthesizer = TableSynthesizer(synthesizer_name, metadata, filepath=save_path)
-            print(f"Loaded {synthesizer_name} synthesizer from {save_path}")
-            with open(fit_time_path, "r") as f:
-                fit_time = float(f.read())
-        else:
-            synthesizer = TableSynthesizer(synthesizer_name, metadata)
-            print(f"Fitting the {synthesizer_name} synthesizer ...")
-            start = time.time()
-            synthesizer.fit(data)
-            fit_time = time.time()- start
-            print(f"Fitting Time taken: {fit_time:.2f}s")
-            # save synthesizer
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            synthesizer.synthesizer.save(save_path)
-            with open(fit_time_path, "w") as f:
-                f.write(str(fit_time))
-        # synthesis period
-        num_samples = 10000
-        start = time.time()
-        synthetic_data = synthesizer.sample(num_samples)
-        sample_time = time.time()- start
-        sample_time_per_row = sample_time / num_samples
-        print(f"Time taken to generate {num_samples} samples: {sample_time:.2f}s")
-        print(f"Average time taken to generate a sample: {(sample_time) * 1000 / num_samples:.2f}ms")
-        print('='*10)
-        
-        # save samples
-        samples_path.parent.mkdir(parents=True, exist_ok=True)
-        synthetic_data.to_csv(samples_path, index=False)
-        
-        ## Quality Report
-        from sdmetrics.reports.single_table import QualityReport
-        quality_report = QualityReport()
-        quality_report.generate(data, synthetic_data, list(metadata.tables.values())[0].to_dict())
-        score = quality_report.get_score()
-        properties = quality_report.get_properties() # dataframe
-        property_score = {k: v for k, v in zip(properties['Property'], properties['Score'])}
-        details = defaultdict(dict)
-        for k in properties['Property']:
-            cur_details = quality_report.get_details(property_name=k)
-            for index, row in cur_details.iterrows():
-                details[row.iloc[1]][row.iloc[0]] = row.iloc[2]
-            fig = quality_report.get_visualization(property_name=k)
-            fig.write_image(quality_report_path.parent / f"{quality_report_path.stem}_{k}.png")
-        
-        # another synthesizer
-        synthesizer_name = 'DecompositionSynthesizer'
-        samples_path = Path("saves") / dataset_name / f"{synthesizer_name}_samples.csv"
-        quality_report_path = Path("saves") / dataset_name / f"{synthesizer_name}_quality_report.pkl"
-        save_path = Path("saves") / dataset_name / f"{synthesizer_name}.pkl"
-        fit_time_path = Path("saves") / dataset_name / f"{synthesizer_name}_fit_time.txt"
-        decomposed_synthesizer = DecompositionSynthesizer(metadata, row_fraction=0.5, col_fraction=0.5)
-        start = time.time()
-        decomposed_synthesizer.fit(data)
-        decomposed_fit_time = time.time() - start
+    
+    def create_decomposition_synthesizer_factory(base_synth_name, decomposer_class):
+        return lambda metadata: DecompositionSynthesizer(metadata, synthesizer_name=base_synth_name, decomposer=decomposer_class)
+    
+    synthesizer_classes = {
+        "GaussianCopulaSynthesizer": lambda metadata: TableSynthesizer("GaussianCopulaSynthesizer", metadata),
+        "CTGANSynthesizer": lambda metadata: TableSynthesizer("CTGANSynthesizer", metadata),
+        "TVAESynthesizer": lambda metadata: TableSynthesizer("TVAESynthesizer", metadata),
+        "CopulaGANSynthesizer": lambda metadata: TableSynthesizer("CopulaGANSynthesizer", metadata),
+        # Decomposition synthesizers with different base synthesizers
+        "Decomposition_GaussianCopulaSynthesizer": lambda metadata, **kwargs: DecompositionSynthesizer(metadata, **kwargs),
+        "Decomposition_CTGANSynthesizer": lambda metadata, **kwargs: DecompositionSynthesizer(metadata, **kwargs),
+        "Decomposition_TVAESynthesizer": lambda metadata, **kwargs: DecompositionSynthesizer(metadata, **kwargs),
+        "Decomposition_CopulaGANSynthesizer": lambda metadata, **kwargs: DecompositionSynthesizer(metadata, **kwargs),
+    }
 
-        start = time.time()
-        decomposed_samples = decomposed_synthesizer.sample(num_samples)
-        decomposed_sample_time = time.time() - start
-        print('='*10)
-        print(f"Decomposed Synthesizer Fit Time: {decomposed_fit_time:.2f}s")
-        print(f"Decomposed Synthesizer Sample Time: {decomposed_sample_time:.2f}s")
-        timing_details = decomposed_synthesizer.get_timing_details()
-        print(json.dumps(timing_details,indent=4))
-        print('='*10)
-        
-        # save samples
-        synthetic_data = decomposed_samples
-        samples_path.parent.mkdir(parents=True, exist_ok=True)
-        synthetic_data.to_csv(samples_path, index=False)
-        
-        ## Quality Report
-        from sdmetrics.reports.single_table import QualityReport
-        quality_report = QualityReport()
-        quality_report.generate(data, synthetic_data, list(metadata.tables.values())[0].to_dict())
-        score = quality_report.get_score()
-        properties = quality_report.get_properties() # dataframe
-        property_score = {k: v for k, v in zip(properties['Property'], properties['Score'])}
-        details = defaultdict(dict)
-        for k in properties['Property']:
-            cur_details = quality_report.get_details(property_name=k)
-            for index, row in cur_details.iterrows():
-                details[row.iloc[1]][row.iloc[0]] = row.iloc[2]
-            fig = quality_report.get_visualization(property_name=k)
-            fig.write_image(quality_report_path.parent / f"{quality_report_path.stem}_{k}.png")
-        
+    # Define the row sizes you want to test
+    row_sizes = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]  # Adjust as needed
 
-    row_sizes = list(range(1000, 11000, 1000))
-    fit_times_original = []
-    fit_times_decomposed = []
-    sample_times_original = []
-    sample_times_decomposed = []
+    print('available dataset_names are: ', dataset_names)
+    # Run benchmark
+    benchmark_datasets_and_synthesizers(
+        #datasets=dataset_names,
+        datasets=['covtype'], ###### TODO: modify
+        synthesizers=synthesizer_classes,
+        num_samples=1000,
+        row_sizes=row_sizes,
+        save_path="benchmark_results.xlsx",
+        numerical_only=False
+    )
+    synthesizer_classes = {
+        "GaussianCopulaSynthesizer": lambda metadata: TableSynthesizer("GaussianCopulaSynthesizer", metadata),
+        "CTGANSynthesizer": lambda metadata: TableSynthesizer("CTGANSynthesizer", metadata),
+        "TVAESynthesizer": lambda metadata: TableSynthesizer("TVAESynthesizer", metadata),
+        "CopulaGANSynthesizer": lambda metadata: TableSynthesizer("CopulaGANSynthesizer", metadata),
+    }
 
-    # Loop through each row size and measure times
-    for num_rows in tqdm(row_sizes, desc="Benchmarking"):
-        # Prepare data of the current size
-        data_subset = real_data[:num_rows]
 
-        # Original Synthesizer
-        print(f"Testing original synthesizer with {num_rows} rows...")
-        synthesizer = TableSynthesizer("GaussianCopulaSynthesizer", metadata)
-        start = time.time()
-        synthesizer.fit(data_subset)
-        fit_time_original = time.time() - start
 
-        start = time.time()
-        synthetic_data = synthesizer.sample(num_samples)
-        sample_time_original = time.time() - start
 
-        # Decomposed Synthesizer
-        print(f"Testing decomposed synthesizer with {num_rows} rows...")
-        decomposed_synthesizer = DecompositionSynthesizer(metadata, row_fraction=0.5, col_fraction=0.5)
-        start = time.time()
-        decomposed_synthesizer.fit(data_subset)
-        fit_time_decomposed = time.time() - start
 
-        start = time.time()
-        decomposed_samples = decomposed_synthesizer.sample(num_samples)
-        sample_time_decomposed = time.time() - start
-
-        # Store the results
-        fit_times_original.append(fit_time_original)
-        sample_times_original.append(sample_time_original)
-        fit_times_decomposed.append(fit_time_decomposed)
-        sample_times_decomposed.append(sample_time_decomposed)
-
-    # Plot the results
-    plt.figure(figsize=(12, 6))
-
-    # Fit Time Plot
-    plt.subplot(1, 2, 1)
-    plt.plot(row_sizes, fit_times_original, label='Original Synthesizer', marker='o')
-    plt.plot(row_sizes, fit_times_decomposed, label='Decomposed Synthesizer', marker='o')
-    plt.xlabel('Number of Rows')
-    plt.ylabel('Fit Time (seconds)')
-    plt.title('Fit Time vs Number of Rows')
-    plt.legend()
-    plt.grid()
-
-    # Sample Time Plot
-    plt.subplot(1, 2, 2)
-    plt.plot(row_sizes, sample_times_original, label='Original Synthesizer', marker='o')
-    plt.plot(row_sizes, sample_times_decomposed, label='Decomposed Synthesizer', marker='o')
-    plt.xlabel('Number of Rows')
-    plt.ylabel('Sample Time (seconds)')
-    plt.title('Sample Time vs Number of Rows')
-    plt.legend()
-    plt.grid()
-
-    # Show and save the plot
-    plt.tight_layout()
-    plt.show()
-    plt.savefig("synthesizer_scaling_comparison.png")
+    # next test matrix decomposition (which requires numerical_only=True)
+    base_synthesizers = ["GaussianCopulaSynthesizer", "CTGANSynthesizer", "TVAESynthesizer", "CopulaGANSynthesizer"]
+    decomposer_names = ["Truncate", "NMF", "PCA", "SVD", "ICA", "FactorAnalysis", "DictionaryLearning"]
+    decomposer_kwargs_mapping = {
+        "NMF": {"n_components": 2},
+        "PCA": {"n_components": 2},
+        "SVD": {"n_components": 2},
+        "ICA": {"n_components": 2},
+        "FactorAnalysis": {"n_components": 2},
+        "DictionaryLearning": {"n_components": 2},
+        "Truncate": {"row_fraction": 0.5, "col_fraction": 0.5},
+    }
+    # Add decomposition synthesizers with different base synthesizers and decomposers
+    for base_synth_name in base_synthesizers:
+        for decomposer_name in decomposer_names:
+            synthesizer_name = f"Decomposition_{base_synth_name}_{decomposer_name}"
+            decomposer_kwargs = decomposer_kwargs_mapping.get(decomposer_name, {})
+            synthesizer_classes[synthesizer_name] = create_decomposition_synthesizer_factory(
+                base_synth_name,
+                decomposer_name,
+                **decomposer_kwargs
+            )
+    # Run benchmark for decomposer synthesizers
+    benchmark_datasets_and_synthesizers(
+        datasets=['covtype'], ###### TODO: modify
+        synthesizers={key: synthesizer_classes[key] for key in synthesizer_classes if key.startswith('Decomposition')},
+        num_samples=1000,
+        row_sizes=row_sizes,
+        save_path="benchmark_results_decomposers",
+        numerical_only=True  # Filter data to numerical columns
+    )

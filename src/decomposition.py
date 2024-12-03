@@ -5,6 +5,10 @@ from scipy.stats import norm
 import time
 import pandas as pd
 import itertools
+from sklearn.decomposition import NMF
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import mean_squared_error
 
 class BaseDecomposition:
     def split(self, data: pd.DataFrame):
@@ -376,8 +380,285 @@ class TruncateDecomposition(BaseDecomposition):
         # Concatenate rows to restore original structure
         return pd.concat([top, bottom], axis=0)
 
+class NMFDecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        """
+        Initialize the NMF decomposition class.
+
+        :param n_components: Number of components for decomposition.
+        """
+        self.n_components = n_components
+        self.model = NMF(n_components=n_components, init='random', random_state=42)
+
+    def split(self, data: pd.DataFrame):
+        """
+        Perform NMF decomposition on the input data.
+
+        :param data: Input DataFrame (should contain non-negative numerical values).
+        :return: Factorized matrices W and H as a dictionary.
+        """
+        self.W = self.model.fit_transform(data)
+        self.H = self.model.components_
+        return {"W": self.W, "H": self.H}
+
+    def join(self, data_parts: list):
+        """
+        Reconstruct the original matrix from factorized matrices.
+
+        :param data_parts: A dictionary with "W" and "H" matrices.
+        :return: Reconstructed DataFrame.
+        """
+        W = data_parts.get("W")
+        H = data_parts.get("H")
+        return pd.DataFrame(np.dot(W, H))
+
+class PCADecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        """
+        Initialize the PCA decomposition class.
+
+        :param n_components: Number of principal components.
+        """
+        self.n_components = n_components
+        self.model = PCA(n_components=n_components)
+
+    def split(self, data: pd.DataFrame):
+        """
+        Perform PCA decomposition on the input data.
+
+        :param data: Input DataFrame with numerical values.
+        :return: Dictionary containing the principal components and explained variance.
+        """
+        self.components = self.model.fit_transform(data)
+        self.explained_variance = self.model.explained_variance_ratio_
+        self.mean = self.model.mean_
+        self.components_ = self.model.components_
+        return {
+            "components": self.components,
+            "explained_variance": self.explained_variance,
+            "mean": self.mean,
+            "components_": self.components_
+        }
+
+    def join(self, data_parts: dict):
+        """
+        Reconstruct the original data from the principal components.
+
+        :param data_parts: Dictionary containing the principal components and model parameters.
+        :return: Reconstructed DataFrame.
+        """
+        components = data_parts["components"]
+        components_ = data_parts["components_"]
+        mean = data_parts["mean"]
+        reconstructed_data = np.dot(components, components_) + mean
+        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+from sklearn.decomposition import TruncatedSVD
+
+class SVDDecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        """
+        Initialize the SVD decomposition class.
+
+        :param n_components: Number of singular values and vectors to compute.
+        """
+        self.n_components = n_components
+        self.model = TruncatedSVD(n_components=n_components)
+
+    def split(self, data: pd.DataFrame):
+        """
+        Perform SVD decomposition on the input data.
+
+        :param data: Input DataFrame with numerical values.
+        :return: Dictionary containing the decomposed matrices.
+        """
+        self.U = self.model.fit_transform(data)
+        self.Sigma = self.model.singular_values_
+        self.VT = self.model.components_
+        return {
+            "U": self.U,
+            "Sigma": self.Sigma,
+            "VT": self.VT
+        }
+
+    def join(self, data_parts: dict):
+        """
+        Reconstruct the original data from the decomposed matrices.
+
+        :param data_parts: Dictionary containing U, Sigma, and VT.
+        :return: Reconstructed DataFrame.
+        """
+        U = data_parts["U"]
+        Sigma = np.diag(data_parts["Sigma"])
+        VT = data_parts["VT"]
+        reconstructed_data = np.dot(U, np.dot(Sigma, VT))
+        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+
+from sklearn.decomposition import FastICA
+
+class ICADecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        self.n_components = n_components
+        self.model = FastICA(n_components=n_components, random_state=42)
+
+    def split(self, data: pd.DataFrame):
+        self.S_ = self.model.fit_transform(data)
+        self.A_ = self.model.mixing_
+        return {"S": self.S_, "A": self.A_}
+
+    def join(self, data_parts: dict):
+        S = data_parts["S"]
+        A = data_parts["A"]
+        reconstructed_data = np.dot(S, A.T)
+        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+
+from sklearn.decomposition import FactorAnalysis
+
+class FactorAnalysisDecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        self.n_components = n_components
+        self.model = FactorAnalysis(n_components=n_components)
+
+    def split(self, data: pd.DataFrame):
+        self.transformed_data = self.model.fit_transform(data)
+        return {"transformed_data": self.transformed_data}
+
+    def join(self, data_parts: dict):
+        # Factor Analysis does not provide a direct way to reconstruct data
+        # This is a limitation of FA; you might need to handle reconstruction differently
+        raise NotImplementedError("Reconstruction is not directly supported in Factor Analysis.")
+
+from sklearn.decomposition import DictionaryLearning
+
+class DictionaryLearningDecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        self.n_components = n_components
+        self.model = DictionaryLearning(n_components=n_components, random_state=42)
+
+    def split(self, data: pd.DataFrame):
+        self.code = self.model.fit_transform(data)
+        self.dictionary = self.model.components_
+        return {"code": self.code, "dictionary": self.dictionary}
+
+    def join(self, data_parts: dict):
+        code = data_parts["code"]
+        dictionary = data_parts["dictionary"]
+        reconstructed_data = np.dot(code, dictionary)
+        return pd.DataFrame(reconstructed_data, columns=data.columns)
+
+from sklearn.decomposition import LatentDirichletAllocation
+
+class LDADecomposition(BaseDecomposition):
+    def __init__(self, n_components):
+        self.n_components = n_components
+        self.model = LatentDirichletAllocation(n_components=n_components, random_state=42)
+
+    def split(self, data: pd.DataFrame):
+        self.doc_topic_dist = self.model.fit_transform(data)
+        self.components_ = self.model.components_
+        return {"doc_topic_dist": self.doc_topic_dist, "components": self.components_}
+
+    def join(self, data_parts: dict):
+        doc_topic_dist = data_parts["doc_topic_dist"]
+        components = data_parts["components"]
+        reconstructed_data = np.dot(doc_topic_dist, components)
+        return pd.DataFrame(reconstructed_data, columns=data.columns)
+
+def process_categorical_data(data, encoding='onehot'):
+    """
+    Encode categorical data into numerical format.
+
+    :param data: Input DataFrame with categorical columns.
+    :param encoding: Encoding method ('onehot' or 'label').
+    :return: Encoded data as a DataFrame and the encoder object.
+    """
+    if encoding == 'onehot':
+        encoder = OneHotEncoder(sparse=False)
+        encoded_data = encoder.fit_transform(data)
+        return pd.DataFrame(encoded_data, columns=encoder.get_feature_names_out(data.columns)), encoder
+    elif encoding == 'label':
+        label_encoders = {}
+        encoded_data = pd.DataFrame()
+        for column in data.columns:
+            le = LabelEncoder()
+            encoded_data[column] = le.fit_transform(data[column])
+            label_encoders[column] = le
+        return encoded_data, label_encoders
+    else:
+        raise ValueError("Unsupported encoding type. Use 'onehot' or 'label'.")
+
+def recover_categorical_data(encoded_data, encoder, encoding='onehot'):
+    """
+    Recover original categorical data from encoded values.
+
+    :param encoded_data: Encoded data as a DataFrame or numpy array.
+    :param encoder: Encoder object used during encoding.
+    :param encoding: Encoding method used ('onehot' or 'label').
+    :return: Decoded DataFrame with original categorical data.
+    """
+    if encoding == 'onehot':
+        return pd.DataFrame(encoder.inverse_transform(encoded_data), columns=encoder.get_feature_names_out())
+    elif encoding == 'label':
+        recovered_data = {}
+        for column, le in encoder.items():
+            recovered_data[column] = le.inverse_transform(encoded_data[column].astype(int))
+        return pd.DataFrame(recovered_data)
+    else:
+        raise ValueError("Unsupported encoding type. Use 'onehot' or 'label'.")
+
+def test_decomposition(decomposition_class, data, **kwargs):
+    print(f"\n=== Testing {decomposition_class.__name__} ===")
+    print("\n=== Original Data ===")
+    print(data.head())
+
+    # Initialize and perform decomposition
+    decomposer = decomposition_class(**kwargs)
+    decomposed_parts = decomposer.split(data)
+
+    # Display decomposed parts
+    print("\n=== Decomposed Parts ===")
+    if isinstance(decomposed_parts, dict):
+        for key, value in decomposed_parts.items():
+            print(f"{key} shape: {np.shape(value)}")
+    else:
+        print(f"Decomposed parts shape: {np.shape(decomposed_parts)}")
+
+    # Reconstruct the data if possible
+    try:
+        reconstructed = decomposer.join(decomposed_parts)
+        print("\n=== Reconstructed Data ===")
+        print(reconstructed.head())
+
+        # Handle any small negative values
+        reconstructed[reconstructed < 0] = 0
+
+        # Compare original and reconstructed data
+        print("\n=== Comparison ===")
+        original_flat = data.values.flatten()
+        reconstructed_flat = reconstructed.values.flatten()
+        comparison = pd.DataFrame({
+            'Original': original_flat[:len(reconstructed_flat)],
+            'Reconstructed': reconstructed_flat
+        })
+        print(comparison.head())
+
+        # Compute reconstruction error
+        mse = mean_squared_error(original_flat[:len(reconstructed_flat)], reconstructed_flat)
+        print(f"\nMean Squared Error between original and reconstructed data: {mse}")
+    except NotImplementedError as e:
+        print(f"\n{e}")
+
 if __name__ == "__main__":
-    test_mode = 'TruncateDecomposition'
+    decomposition_classes = {
+        'NMFDecomposition': NMFDecomposition,
+        'PCADecomposition': PCADecomposition,
+        'SVDDecomposition': SVDDecomposition,
+        'ICADecomposition': ICADecomposition,
+        'FactorAnalysisDecomposition': FactorAnalysisDecomposition,
+        'DictionaryLearningDecomposition': DictionaryLearningDecomposition,
+        #'LDADecomposition': LDADecomposition,
+    }
+    #test_mode = 'TruncateDecomposition'
+    test_mode = 'NMFDecomposition'
     if test_mode == 'BayesianDecomposition':
         from .dataloader import DemoDataLoader
         real_data, _ = DemoDataLoader(dataset_name='covtype').load_data()
@@ -431,4 +712,23 @@ if __name__ == "__main__":
         print("\nJoined Table:")
         print(joined_table)
 
+    if test_mode == 'NMFDecomposition':
+        # NMF requires non-negative data
+        data = pd.DataFrame(np.random.rand(100, 5), columns=[f"Feature{i}" for i in range(1, 6)])
+    else:
+        data = pd.DataFrame(np.random.randn(100, 5), columns=[f"Feature{i}" for i in range(1, 6)])
 
+    from sklearn.preprocessing import StandardScaler
+    # Standardize data if necessary
+    if test_mode in ['PCADecomposition', 'ICADecomposition', 'SVDDecomposition', 'FactorAnalysisDecomposition', 'DictionaryLearningDecomposition']:
+        scaler = StandardScaler()
+        data = pd.DataFrame(scaler.fit_transform(data), columns=data.columns)
+
+    n_components = 2
+    # Get the decomposition class
+    decomposition_class = decomposition_classes.get(test_mode)
+    if decomposition_class is None:
+        print(f"Decomposition class for {test_mode} not found.")
+    else:
+        # Test the decomposition
+        test_decomposition(decomposition_class, data, n_components=n_components)
