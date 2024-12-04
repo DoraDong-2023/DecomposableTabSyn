@@ -11,7 +11,9 @@ class DemoDataLoader(BaseDataLoader):
         self.modality = modality
         self.dataset_name = dataset_name
     def load_data(self):
+        print(f"\nLoading {self.dataset_name} dataset ...")
         real_data, metadata = download_demo(modality=self.modality, dataset_name=self.dataset_name)
+        print(f"Dataset {self.dataset_name} loaded successfully.")
         return real_data, metadata
 
 if __name__ == "__main__":
