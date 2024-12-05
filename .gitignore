@@ -170,3 +170,4 @@ cython_debug/
 /src/benchmark_results
 /saves
 /.vscode
+/src/*.txt

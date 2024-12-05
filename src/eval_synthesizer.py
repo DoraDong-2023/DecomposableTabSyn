@@ -239,7 +239,8 @@ def main(
     available_dataset_names = get_available_demos(modality='single_table')['dataset_name'].tolist()
     assert all(dataset_name in available_dataset_names for dataset_name in dataset_names), \
         f"Invalid dataset name {dataset_name}. Available dataset names are: {available_dataset_names}"
-    
+    if decomposer_name == "no_decomposition":
+        decomposer_name = None
     get_new_synthesizer = partial(
         get_synthesizer,
         synthesizer_name=synthesizer_name,
@@ -251,7 +252,13 @@ def main(
         nf_level=nf_level,
     )
         
-    # sampled_train_data = real_data.sample(num_train_samples, random_state=seed)
+    to_save_decomposition_name = decomposer_name if decomposer_name else "no_decomposition"
+    if to_save_decomposition_name == "TruncateDecomposition":
+        to_save_decomposition_name += f"_rf_{row_fraction}_cf_{col_fraction}"
+    elif to_save_decomposition_name == "NFDecomposition":
+        to_save_decomposition_name += f"_nf_{nf_level}"
+    else:
+        to_save_decomposition_name += f"_n_{default_n_components}"
 
     save_path = Path("benchmark_results") / dataset_name / (decomposer_name or "no_decomposition") / synthesizer_name
     save_path.mkdir(parents=True, exist_ok=True)
