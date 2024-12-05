@@ -19,7 +19,7 @@ class BaseDecomposition:
 
     def join(self, data_parts: list):
         raise NotImplementedError("Subclasses should implement this method.")
-
+    
 class TableDecomposition(BaseDecomposition):
     def split(self, data: pd.DataFrame):
         split_tables = [data.iloc[:, :len(data.columns)//2], data.iloc[:, len(data.columns)//2:]]
@@ -825,22 +825,22 @@ class NFDecomposition(BaseDecomposition):
             return pd.DataFrame()
         
         result = tables[0]
-        # for table in tqdm(tables[1:], desc="Joining Tables"):
-        #     common_cols = list(set(result.columns) & set(table.columns))
-        #     if common_cols:
-        #         result = result.merge(table, on=common_cols, how='left')
-        remaining_tables = tables[1:]
-        tqdm_remaining_tables = tqdm(remaining_tables, desc="Joining Tables")
-        while remaining_tables:
-            # table_with_most_common_cols = max(remaining_tables, key=lambda x: len(set(result.columns) & set(x.columns)))
-            table = min(remaining_tables, key=lambda x: len(set(result.columns)))
+        for table in tqdm(tables[1:], desc="Joining Tables"):
             common_cols = list(set(result.columns) & set(table.columns))
             if common_cols:
                 result = result.merge(table, on=common_cols, how='left')
-                remaining_tables.remove(table)
-            else:
-                remaining_tables.remove(table)
-            tqdm_remaining_tables.update(1)
+        # remaining_tables = tables[1:]
+        # tqdm_remaining_tables = tqdm(remaining_tables, desc="Joining Tables")
+        # while remaining_tables:
+        #     # table_with_most_common_cols = max(remaining_tables, key=lambda x: len(set(result.columns) & set(x.columns)))
+        #     table = min(remaining_tables, key=lambda x: len(set(result.columns)))
+        #     common_cols = list(set(result.columns) & set(table.columns))
+        #     if common_cols:
+        #         result = result.merge(table, on=common_cols, how='left')
+        #         remaining_tables.remove(table)
+        #     else:
+        #         remaining_tables.remove(table)
+        #     tqdm_remaining_tables.update(1)
                 
         # change column order to match original data
         result = result[self.original_data_columns]
@@ -880,6 +880,12 @@ class TruncateDecomposition(BaseDecomposition):
 
         return [part1, part2, part3, part4]
 
+    def num_rows_to_sample_per_subtable(self, num_rows: int):
+        """
+        Calculate the number of rows to sample per subtable based on the row fraction.
+        """
+        row_midpoint = int(num_rows * self.row_fraction)
+        return [row_midpoint, row_midpoint, num_rows - row_midpoint, num_rows - row_midpoint]
     def join(self, data_parts: list):
         """
         Recombine the four pieces back into the original DataFrame structure.
@@ -908,20 +914,53 @@ class NMFDecomposition(BaseDecomposition):
         :param data: Input DataFrame (should contain non-negative numerical values).
         :return: Factorized matrices W and H as a dictionary.
         """
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+        
         self.W = self.model.fit_transform(data)
         self.H = self.model.components_
-        return {"W": self.W, "H": self.H}
+        # convert to pandas DataFrame
+        decomposed_table = pd.DataFrame(self.W, columns=[f"Component{i+1}" for i in range(self.n_components)])
+        return [decomposed_table]
 
-    def join(self, data_parts: list):
+    def join(self, tables: pd.DataFrame):
         """
         Reconstruct the original matrix from factorized matrices.
 
         :param data_parts: A dictionary with "W" and "H" matrices.
         :return: Reconstructed DataFrame.
         """
-        W = data_parts.get("W")
-        H = data_parts.get("H")
-        return pd.DataFrame(np.dot(W, H))
+        # W = data_parts.get("W")
+        # H = data_parts.get("H")
+        W = tables
+        if isinstance(W, list):
+            W = W[0]
+        H = self.H
+        # convert to numpy array
+        if isinstance(W, pd.DataFrame):
+            W = W.to_numpy()
+        if isinstance(H, pd.DataFrame):
+            H = H.to_numpy()
+            
+        reconstructed_data = self.model.inverse_transform(W)
+            
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
 
 class PCADecomposition(BaseDecomposition):
     def __init__(self, n_components):
@@ -940,6 +979,17 @@ class PCADecomposition(BaseDecomposition):
         :param data: Input DataFrame with numerical values.
         :return: Dictionary containing the principal components and explained variance.
         """
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+
         self.components = self.model.fit_transform(data)
         self.explained_variance = self.model.explained_variance_ratio_
         self.mean = self.model.mean_
@@ -968,7 +1018,16 @@ class PCADecomposition(BaseDecomposition):
         if isinstance(components, pd.DataFrame):
             components = components.to_numpy()
         reconstructed_data = np.dot(components, self.model.components_) + self.model.mean_
-        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
     
     def join_data_parts(self, data_parts: dict):
         """
@@ -1002,6 +1061,17 @@ class SVDDecomposition(BaseDecomposition):
         :param data: Input DataFrame with numerical values.
         :return: Dictionary containing the decomposed matrices.
         """
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+        
         self.U = self.model.fit_transform(data)
         self.Sigma = self.model.singular_values_
         self.VT = self.model.components_
@@ -1024,7 +1094,16 @@ class SVDDecomposition(BaseDecomposition):
         # reconstructed_data = self.model.inverse_transform(U)
         # Dongfu: U has already been applied to Sigma, no need to multiply again
         reconstructed_data = U @ self.VT
-        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
+    
     
     def join_data_parts(self, data_parts: dict):
         """
@@ -1048,6 +1127,17 @@ class ICADecomposition(BaseDecomposition):
         self.model = FastICA(n_components=n_components, random_state=42)
 
     def split(self, data: pd.DataFrame):
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+        
         self.S_ = self.model.fit_transform(data)
         self.A_ = self.model.mixing_
         # convert to pandas DataFrame
@@ -1062,7 +1152,16 @@ class ICADecomposition(BaseDecomposition):
         if isinstance(S, pd.DataFrame):
             S = S.to_numpy()
         reconstructed_data = self.model.inverse_transform(S)
-        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
     
     def join_data_parts(self, data_parts: dict):
         S = data_parts["S"]
@@ -1079,6 +1178,17 @@ class FactorAnalysisDecomposition(BaseDecomposition):
         self.model = FactorAnalysis(n_components=n_components)
 
     def split(self, data: pd.DataFrame):
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+        
         self.X_transformed = self.model.fit_transform(data)
         table = pd.DataFrame(self.X_transformed, columns=[f"Factor{i+1}" for i in range(self.n_components)])
         return [table]
@@ -1092,7 +1202,15 @@ class FactorAnalysisDecomposition(BaseDecomposition):
             X_transformed = X_transformed.to_numpy()
         # reconstructed_data = self.model.inverse_transform(X_transformed)
         reconstructed_data = np.dot(X_transformed, self.model.components_) + self.model.mean_
-        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
 
 from sklearn.decomposition import DictionaryLearning
 
@@ -1102,6 +1220,17 @@ class DictionaryLearningDecomposition(BaseDecomposition):
         self.model = DictionaryLearning(n_components=n_components, random_state=42)
 
     def split(self, data: pd.DataFrame):
+        # for the string columns, we need to convert them to numerical values, and keep a index to convert back
+        self.category_mappings = {}
+        for col in data.columns:
+            if data[col].dtype == 'object':
+                # Create categorical and store the mapping
+                categorical = pd.Categorical(data[col])
+                data[col] = categorical.codes
+                self.category_mappings[col] = dict(enumerate(categorical.categories))
+        # self.column_data_types = data.dtypes
+        self.column_data_types = {col: str(data[col].dtype) for col in data.columns}
+        
         self.code = self.model.fit_transform(data)
         self.dictionary = self.model.components_
         # convert to pandas DataFrame
@@ -1116,7 +1245,16 @@ class DictionaryLearningDecomposition(BaseDecomposition):
         if isinstance(code, pd.DataFrame):
             code = code.to_numpy()
         reconstructed_data = np.dot(code, self.model.components_)
-        return pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        
+        joined_df = pd.DataFrame(reconstructed_data, columns=self.model.feature_names_in_)
+        for col in self.column_data_types:
+            if "int" in self.column_data_types[col]:
+                joined_df[col] = joined_df[col].round(0)
+        joined_df = joined_df.astype(self.column_data_types)
+        # convert back to original data types for all columns, using self.column_data_types, not the fucking self.category_mappings, 
+        for col in self.category_mappings:
+            joined_df[col] = joined_df[col].map(self.category_mappings[col])
+        return joined_df
 
 def process_categorical_data(data, encoding='onehot'):
     """
@@ -1205,7 +1343,7 @@ def test_decomposition(decomposition_class, data, **kwargs):
         
 def main(
     dataset_name: str = 'adult',
-    decomposition_method: str = 'NFDecomposition',
+    decomposition_method: str = 'PCADecomposition',
     sample_size: int = 1000,
     decomposition_init_kwargs: dict = {},
     decomposition_kwargs: dict = {}

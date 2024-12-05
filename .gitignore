@@ -167,3 +167,6 @@ cython_debug/
 /src/*.json
 /src/saves
 /src/plots
+/src/benchmark_results
+/saves
+/.vscode
