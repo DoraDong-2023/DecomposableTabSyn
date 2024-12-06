@@ -1,7 +1,7 @@
 import time
 import pandas as pd
-from .base_synthesizer import BaseSynthesis, TableSynthesizer
-from decomposition import (
+from src.synthesizers.base_synthesizer import BaseSynthesis, TableSynthesizer
+from src.decomposition import (
     TruncateDecomposition,
     NMFDecomposition,
     PCADecomposition,
@@ -69,7 +69,7 @@ class DecompositionSynthesizer(BaseSynthesis):
         for i, sub_table in tqdm(enumerate(sub_tables), total=len(sub_tables), desc="Fitting synthesizers"):
             
             sub_table_metadata = self._update_metadata(sub_table)
-            synthesizer = TableSynthesizer(self.synthesizer_name, sub_table_metadata)
+            synthesizer = TableSynthesizer(self.synthesizer_name, sub_table_metadata, synthesizer_config=self.synthesizer_init_kwargs)
             start_time = time.time()
             synthesizer.fit(sub_table)
             fit_time = time.time() - start_time
@@ -131,17 +131,17 @@ class DecompositionSynthesizer(BaseSynthesis):
         
         
 if __name__ == "__main__":
-    from ..dataloader import DemoDataLoader
+    from src.dataloader import DemoDataLoader
     real_data, meta_data = DemoDataLoader(dataset_name="covtype").load_data()
-    real_data = real_data.sample(1000)
+    real_data = real_data.sample(5000)
     
     print("Real Data:")
     print(real_data.head())
     decomposer_name = "PCADecomposition"
-    synthesizer_name = "TVAESynthesizer"
+    synthesizer_name = "REaLTabFormer"
     decomposer_init_kwargs = {"n_components": 8}
     decomposer_split_kwargs = {}
-    synthesizer_init_kwargs = {"epochs": 5}
+    synthesizer_init_kwargs = {"epochs": 2}
     
     synthesizer = DecompositionSynthesizer(
         meta_data, synthesizer_name=synthesizer_name, decomposer_name=decomposer_name,

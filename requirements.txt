@@ -9,3 +9,7 @@ scikit-learn
 numpy
 prettytable
 matplotlib
+realtabformer
+accelerate
+datasets
+realtabformer @ git+https://github.com/worldbank/REaLTabFormer.git

@@ -995,7 +995,7 @@ class PCADecomposition(BaseDecomposition):
         self.mean = self.model.mean_
         self.components_ = self.model.components_
         # convert to pandas DataFrame
-        decomposed_table = pd.DataFrame(self.components, columns=[f"PC{i+1}" for i in range(self.n_components)])
+        decomposed_table = pd.DataFrame(self.components, columns=[f"PrincipalComponent{i+1}" for i in range(self.n_components)])
         return [decomposed_table]
         # return {
         #     "components": self.components,

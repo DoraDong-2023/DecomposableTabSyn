@@ -171,3 +171,5 @@ cython_debug/
 /saves
 /.vscode
 /src/*.txt
+/trash
+/rtf_checkpoints
