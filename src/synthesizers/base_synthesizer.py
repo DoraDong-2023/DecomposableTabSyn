@@ -1,4 +1,6 @@
 import pandas as pd
+import os
+import shutil
 from sdv.single_table import (
     GaussianCopulaSynthesizer,
     CTGANSynthesizer,
@@ -7,6 +9,7 @@ from sdv.single_table import (
 )
 from sdv.metadata import SingleTableMetadata
 from .tabula_middle_padding import Tabula
+from realtabformer import REaLTabFormer
 class BaseSynthesis:
     def fit(self, data: pd.DataFrame):
         raise NotImplementedError("Subclasses should implement this method.")
@@ -31,6 +34,11 @@ class TableSynthesizer(BaseSynthesis):
             "experiment_dir": "experiments",
             "batch_size": 32,
             "epochs": 1
+        },
+        "REaLTabFormer": {
+            "model_type": "tabular",
+            "logging_steps": 10,
+            "checkpoints_dir": "rtf_checkpoints",
         }
     }
     def __init__(self, synthesizer_name, metadata, filepath=None, synthesizer_config={}):
@@ -45,9 +53,10 @@ class TableSynthesizer(BaseSynthesis):
             if synthesizer_name == "GaussianCopulaSynthesizer":
                 # pop epochs
                 synthesizer_config.pop("epochs", None)
-            if synthesizer_name == "Tabula":
+            if synthesizer_name in ["Tabula", "REaLTabFormer"]:
                 _synthesizer_config = self.synthesizer_configs[synthesizer_name]
                 _synthesizer_config.update(synthesizer_config)
+                self.synthesizer_config = _synthesizer_config
                 self.synthesizer = synthesizer_class(**_synthesizer_config)
             else:
                 self.synthesizer = synthesizer_class(metadata, **synthesizer_config)
@@ -57,6 +66,9 @@ class TableSynthesizer(BaseSynthesis):
             self.synthesizer.fit(data, conditional_col = data.columns[0])
         else:
             self.synthesizer.fit(data)
-        
+        if self.synthesizer_name == "REaLTabFormer":
+            # remove checkpoint_dir directory
+            shutil.rmtree(self.synthesizer_config["checkpoints_dir"])
+            
     def sample(self, num_rows: int) -> pd.DataFrame:
         return self.synthesizer.sample(num_rows)

@@ -1,7 +1,7 @@
 import time
 import pandas as pd
-from .base_synthesizer import BaseSynthesis, TableSynthesizer
-from decomposition import (
+from src.synthesizers.base_synthesizer import BaseSynthesis, TableSynthesizer
+from src.decomposition import (
     TruncateDecomposition,
     NMFDecomposition,
     PCADecomposition,
@@ -131,17 +131,17 @@ class DecompositionSynthesizer(BaseSynthesis):
         
         
 if __name__ == "__main__":
-    from dataloader import DemoDataLoader
+    from src.dataloader import DemoDataLoader
     real_data, meta_data = DemoDataLoader(dataset_name="covtype").load_data()
-    real_data = real_data.sample(1000)
+    real_data = real_data.sample(5000)
     
     print("Real Data:")
     print(real_data.head())
     decomposer_name = "PCADecomposition"
-    synthesizer_name = "Tabula"
+    synthesizer_name = "REaLTabFormer"
     decomposer_init_kwargs = {"n_components": 8}
     decomposer_split_kwargs = {}
-    synthesizer_init_kwargs = {"epochs": 5}
+    synthesizer_init_kwargs = {"epochs": 2}
     
     synthesizer = DecompositionSynthesizer(
         meta_data, synthesizer_name=synthesizer_name, decomposer_name=decomposer_name,

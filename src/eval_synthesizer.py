@@ -171,37 +171,55 @@ def benchmark_single_synthesizer(datasets, new_synthesizer_fn, num_samples=1000,
     for dataset_name in tqdm(datasets, desc=f"Running experiments on {datasets}"):
         dataset_save_path = save_path / dataset_name
         dataset_save_path.mkdir(parents=True, exist_ok=True)
-        # Load dataset
-        real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
-        num_columns = len(real_data.columns)
-        print(f"Running experiments on {dataset_name} dataset ...")
-        dataset_results = []
-        for num_rows in row_sizes:
-            print(seed)
-            data = real_data.sample(num_rows, random_state=seed)
-            print(f"Using {num_rows} rows from dataset {dataset_name}")
+        if (dataset_save_path / "results.json").exists():
+            print(f"Results on {dataset_name} already exist. Skipping ...")
+            with open(dataset_save_path / "results.json", "r") as f:
+                dataset_results = json.load(f)
+            print(f"Results on {dataset_name} loaded from {dataset_save_path}")
+            # print metrics
+            print("---" * 20)
+            print("Quality Report:")
+            print(f" - Overall Score: {dataset_results[0]['Overall Score']}")
+            print(" - Properties:")
+            for k, v in dataset_results[0]['Properties'].items():
+                print(f"   - {k}: {v}")
+            print(" - Metrics:")
+            for k, v in dataset_results[0]['Metrics'].items():
+                print(f"   - {k}: {v}")
+            print(" - Metrics Overall Score:", dataset_results[0]["Metrics Overall Score"])
             
-            # Initialize synthesizer
-            synthesizer = new_synthesizer_fn(metadata)
-            # Train and evaluate
-            metrics, fit_time, sample_time, decomposition_time = train_and_evaluate_synthesizer(synthesizer, data, metadata, num_samples, dataset_save_path)
-            
-            # Record results
-            row = {
-                "Dataset": dataset_name,
-                "Num Rows": num_rows,
-                "Synthesizer": synthesizer.synthesizer_name,
-                "Fit Time (s)": fit_time,
-                "Sample Time (s)": sample_time,
-                "Decomposition Time (s)": decomposition_time,
-            }
-            row.update(metrics)  # Add metrics to the row
-            dataset_results.append(row)
-        # Convert results to DataFrame
-        # save results to 
-        with open(dataset_save_path / "results.json", "w") as f:
-            json.dump(dataset_results, f, indent=4)
-            print(f"Results on {dataset_name} saved to {dataset_save_path}")
+        else:
+            # Load dataset
+            real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
+            num_columns = len(real_data.columns)
+            print(f"Running experiments on {dataset_name} dataset ...")
+            dataset_results = []
+            for num_rows in row_sizes:
+                data = real_data.sample(num_rows, random_state=seed)
+                print(f"Using {num_rows} rows from dataset {dataset_name}")
+                
+                # Initialize synthesizer
+                synthesizer = new_synthesizer_fn(metadata)
+                # Train and evaluate
+                metrics, fit_time, sample_time, decomposition_time = train_and_evaluate_synthesizer(synthesizer, data, metadata, num_samples, dataset_save_path)
+                
+                # Record results
+                row = {
+                    "Dataset": dataset_name,
+                    "Num Rows": num_rows,
+                    "Synthesizer": synthesizer.synthesizer_name,
+                    "Fit Time (s)": fit_time,
+                    "Sample Time (s)": sample_time,
+                    "Decomposition Time (s)": decomposition_time,
+                }
+                row.update(metrics)  # Add metrics to the row
+                dataset_results.append(row)
+                data.to_csv(dataset_save_path / f"{num_rows}_train_{num_samples}_test.csv", index=False)
+            # Convert results to DataFrame
+            # save results to 
+            with open(dataset_save_path / "results.json", "w") as f:
+                json.dump(dataset_results, f, indent=4)
+                print(f"Results on {dataset_name} saved to {dataset_save_path}")
 
 def get_synthesizer(meta_data, synthesizer_name, decomposer_name=None, num_train_epochs=1, default_n_components=4, row_fraction=0.5, col_fraction=0.5, nf_level=3):
     if decomposer_name:
@@ -236,7 +254,7 @@ def main(
     col_fraction: float = 0.5,
     nf_level: int = 3,
 ):
-    dataset_names = dataset_name
+    dataset_names = dataset_name if isinstance(dataset_name, list) else [dataset_name]
     available_dataset_names = get_available_demos(modality='single_table')['dataset_name'].tolist()
     assert all(dataset_name in available_dataset_names for dataset_name in dataset_names), \
         f"Invalid dataset name {dataset_name}. Available dataset names are: {available_dataset_names}"

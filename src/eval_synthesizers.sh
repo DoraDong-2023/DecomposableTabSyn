@@ -4,8 +4,8 @@ num_test_samples=2000
 num_train_samples=5000
 num_train_epochs=5
 seed=42
-for synthesizer_name in "CTGANSynthesizer" "TVAESynthesizer" "CopulaGANSynthesizer" "GaussianCopulaSynthesizer" "Tabula"; do
-    for decomposer_name in "no_decomposition" "PCADecomposition" "SVDDecomposition" "FactorAnalysisDecomposition" "DictionaryLearningDecomposition" "ICADecomposition" "NMFDecomposition" "NFDecomposition" "TruncateDecomposition"; do
+for synthesizer_name in "Tabula" "REaLTabFormer" "CTGANSynthesizer" "TVAESynthesizer" "CopulaGANSynthesizer" "GaussianCopulaSynthesizer"; do
+    for decomposer_name in "no_decomposition" "PCADecomposition" "SVDDecomposition" "FactorAnalysisDecomposition" "ICADecomposition" "NMFDecomposition" "NFDecomposition" "TruncateDecomposition"; do
         echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
         python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name
     done
@@ -18,7 +18,7 @@ num_test_samples=2000
 num_train_epochs=5
 seed=42
 for num_train_samples in 1000 5000 10000 50000 100000; do
-    for synthesizer_name in "TVAESynthesizer"; do
+    for synthesizer_name in "TVAESynthesizer" "REaLTabFormer"; do
         for decomposer_name in "no_decomposition" "PCADecomposition" "NFDecomposition" "TruncateDecomposition"; do
             echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
             python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name
@@ -33,7 +33,7 @@ num_train_samples=5000
 num_train_epochs=5
 seed=42
 for num_test_samples in 1000 2000 4000 8000 16000; do
-    for synthesizer_name in "TVAESynthesizer"; do
+    for synthesizer_name in "TVAESynthesizer" "REaLTabFormer"; do
         for decomposer_name in "no_decomposition" "PCADecomposition" "NFDecomposition" "TruncateDecomposition"; do
             echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
             python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name
@@ -46,22 +46,23 @@ done
 # Figure; x-axis: number of columns, y-axis: quality, fitting time, inference time
 dataset_name="asia,adult,insurance,alarm,covtype,mnist12" # different number of columns; different data structures
 num_train_epochs=5
-synthesizer_name="TVAESynthesizer"
-for decomposer_name in "no_decomposition" "PCADecomposition"; do
-    for num_train_samples in 1000 5000 10000; do
-        for num_test_samples in 1000 2000 4000; do
-            echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
-            python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name    
+for synthesizer_name in "TVAESynthesizer" "REaLTabFormer"; do
+    for decomposer_name in "no_decomposition" "PCADecomposition"; do
+        for num_train_samples in 1000 5000 10000; do
+            for num_test_samples in 1000 2000 4000; do
+                echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
+                python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name    
+            done
         done
     done
 done
 
 
-# Experiment 4 (Tabula): on various datasets, Original synthesizer and decompose-based synthesizers performance trends across different number of columns
+# Experiment 4 (REaLTabFormer): on various datasets, Original synthesizer and decompose-based synthesizers performance trends across different number of columns
 # Figure; x-axis: number of columns, y-axis: quality, fitting time, inference time
 dataset_name="asia,adult,insurance,alarm,covtype,mnist12" # different number of columns; different data structures
 num_train_epochs=5
-synthesizer_name="Tabula"
+synthesizer_name="REaLTabFormer"
 seed=42
 for decomposer_name in "no_decomposition" "PCADecomposition"; do
     for num_train_samples in 1000 5000 10000; do
@@ -78,10 +79,11 @@ dataset_name="covtype" # 47 columns
 num_train_epochs=5
 num_train_samples=5000
 num_test_samples=2000
-synthesizer_name="CTGANSynthesizer"
-for decomposer_name in "PCADecomposition"; do
-    for default_n_components in 2 4 8 16 24 32; do
-        echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
-        python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name --default_n_components $default_n_components
+for synthesizer_name in "TVAESynthesizer" "REaLTabFormer" "Tabula"; do
+    for decomposer_name in "PCADecomposition"; do
+        for default_n_components in 2 4 8 16 24 32; do
+            echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
+            python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name --default_n_components $default_n_components
+        done
     done
 done
