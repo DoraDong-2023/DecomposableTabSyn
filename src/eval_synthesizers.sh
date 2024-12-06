@@ -4,7 +4,7 @@ num_test_samples=2000
 num_train_samples=5000
 num_train_epochs=5
 seed=42
-for synthesizer_name in "CTGANSynthesizer" "TVAESynthesizer" "CopulaGANSynthesizer" "GaussianCopulaSynthesizer"; do
+for synthesizer_name in "CTGANSynthesizer" "TVAESynthesizer" "CopulaGANSynthesizer" "GaussianCopulaSynthesizer" "Tabula"; do
     for decomposer_name in "no_decomposition" "PCADecomposition" "SVDDecomposition" "FactorAnalysisDecomposition" "DictionaryLearningDecomposition" "ICADecomposition" "NMFDecomposition" "NFDecomposition" "TruncateDecomposition"; do
         echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
         python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name
@@ -62,6 +62,7 @@ done
 dataset_name="asia,adult,insurance,alarm,covtype,mnist12" # different number of columns; different data structures
 num_train_epochs=5
 synthesizer_name="Tabula"
+seed=42
 for decomposer_name in "no_decomposition" "PCADecomposition"; do
     for num_train_samples in 1000 5000 10000; do
         for num_test_samples in 1000 2000 4000; do
@@ -70,8 +71,6 @@ for decomposer_name in "no_decomposition" "PCADecomposition"; do
         done
     done
 done
-
-
 
 # Experiment 5: on Covtype, adult and insurance, How does the performance of PCAdecomposition change with the number of components, quality, inference time, and fitting time
 # Figure; x-axis: number of components, y-axis: quality, fitting time, inference time; no_decomposition as baseline

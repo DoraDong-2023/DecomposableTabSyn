@@ -6,6 +6,7 @@ from sdv.single_table import (
     CopulaGANSynthesizer,
 )
 from sdv.metadata import SingleTableMetadata
+from .tabula_middle_padding import Tabula
 class BaseSynthesis:
     def fit(self, data: pd.DataFrame):
         raise NotImplementedError("Subclasses should implement this method.")
@@ -25,6 +26,12 @@ class TableSynthesizer(BaseSynthesis):
         "CopulaGANSynthesizer": {
             "epochs": 1    
         },
+        "Tabula": {
+            "llm": "openai-community/gpt2",
+            "experiment_dir": "experiments",
+            "batch_size": 32,
+            "epochs": 1
+        }
     }
     def __init__(self, synthesizer_name, metadata, filepath=None, synthesizer_config={}):
         assert synthesizer_name in self.synthesizer_configs, f"Invalid synthesizer name: {synthesizer_name}"
@@ -35,10 +42,21 @@ class TableSynthesizer(BaseSynthesis):
         if filepath:
             self.synthesizer = synthesizer_class.load(filepath)
         else:
-            self.synthesizer = synthesizer_class(metadata, **synthesizer_config)
+            if synthesizer_name == "GaussianCopulaSynthesizer":
+                # pop epochs
+                synthesizer_config.pop("epochs", None)
+            if synthesizer_name == "Tabula":
+                _synthesizer_config = self.synthesizer_configs[synthesizer_name]
+                _synthesizer_config.update(synthesizer_config)
+                self.synthesizer = synthesizer_class(**_synthesizer_config)
+            else:
+                self.synthesizer = synthesizer_class(metadata, **synthesizer_config)
             
     def fit(self, data: pd.DataFrame):
-        self.synthesizer.fit(data)
+        if self.synthesizer_name == "Tabula":
+            self.synthesizer.fit(data, conditional_col = data.columns[0])
+        else:
+            self.synthesizer.fit(data)
         
     def sample(self, num_rows: int) -> pd.DataFrame:
         return self.synthesizer.sample(num_rows)

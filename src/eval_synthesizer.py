@@ -79,8 +79,14 @@ def evaluate_single_table_metrics(real_data, synthetic_data, metadata, save_path
         synthetic_col = synthetic_data[column]
 
         if pd.api.types.is_numeric_dtype(real_data[column]):
-            details["BoundaryAdherence"][column] = BoundaryAdherence.compute(real_col.to_frame(), synthetic_col.to_frame())
-            details["RangeCoverage"][column] = RangeCoverage.compute(real_col, synthetic_col)
+            try:
+                details["BoundaryAdherence"][column] = BoundaryAdherence.compute(real_col.to_frame(), synthetic_col.to_frame())
+            except Exception as e:
+                details["BoundaryAdherence"][column] = None
+            try:
+                details["RangeCoverage"][column] = RangeCoverage.compute(real_col, synthetic_col)
+            except Exception as e:
+                details["RangeCoverage"][column] = None
         else:
             details["CategoryCoverage"][column] = CategoryCoverage.compute(real_col, synthetic_col)
         # KSComplement and TVComplement are computed in the quality report
@@ -90,10 +96,13 @@ def evaluate_single_table_metrics(real_data, synthetic_data, metadata, save_path
             for col2 in common_columns:
                 if col1 == col2:
                     continue
-                score = StatisticSimilarity.compute(
-                    real_data[col1],
-                    synthetic_data[col1],
-                )
+                try:
+                    score = StatisticSimilarity.compute(
+                        real_data[col1],
+                        synthetic_data[col1],
+                    )
+                except Exception as e:
+                    score = None
                 if score is not None and not np.isnan(score):
                     details['StatisticalSimilarity'][f"{col1} - {col2}"] = score
         # CorrelationSimilarity and ContingencySimilarity are computed in the quality report
@@ -159,21 +168,23 @@ def train_and_evaluate_synthesizer(synthesizer, real_data, metadata, num_samples
 def benchmark_single_synthesizer(datasets, new_synthesizer_fn, num_samples=1000, row_sizes=[1000], save_path="results", seed=42):
     save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
-    all_results = {}
     for dataset_name in tqdm(datasets, desc=f"Running experiments on {datasets}"):
+        dataset_save_path = save_path / dataset_name
+        dataset_save_path.mkdir(parents=True, exist_ok=True)
         # Load dataset
         real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
         num_columns = len(real_data.columns)
         print(f"Running experiments on {dataset_name} dataset ...")
         dataset_results = []
         for num_rows in row_sizes:
+            print(seed)
             data = real_data.sample(num_rows, random_state=seed)
             print(f"Using {num_rows} rows from dataset {dataset_name}")
             
             # Initialize synthesizer
             synthesizer = new_synthesizer_fn(metadata)
             # Train and evaluate
-            metrics, fit_time, sample_time, decomposition_time = train_and_evaluate_synthesizer(synthesizer, data, metadata, num_samples, save_path)
+            metrics, fit_time, sample_time, decomposition_time = train_and_evaluate_synthesizer(synthesizer, data, metadata, num_samples, dataset_save_path)
             
             # Record results
             row = {
@@ -187,20 +198,10 @@ def benchmark_single_synthesizer(datasets, new_synthesizer_fn, num_samples=1000,
             row.update(metrics)  # Add metrics to the row
             dataset_results.append(row)
         # Convert results to DataFrame
-        results_df = pd.DataFrame(dataset_results)
-        # Store in dictionary
-        all_results[dataset_name] = results_df
-    # Save results to Excel with multiple sheets
-    with pd.ExcelWriter(save_path / "results.xlsx") as writer:
-        for dataset_name, results_df in all_results.items():
-            sheet_name = dataset_name[:31]  # Excel sheet names can't exceed 31 characters
-            results_df.to_excel(writer, sheet_name=sheet_name, index=False)
-            
-    # also write the results to a json file
-    all_results_json = {k: v.to_dict(orient='records') for k, v in all_results.items()}
-    with open(save_path / "results.json", "w") as f:
-        json.dump(all_results_json, f, indent=4)
-    print(f"Results saved to {save_path}")
+        # save results to 
+        with open(dataset_save_path / "results.json", "w") as f:
+            json.dump(dataset_results, f, indent=4)
+            print(f"Results on {dataset_name} saved to {dataset_save_path}")
 
 def get_synthesizer(meta_data, synthesizer_name, decomposer_name=None, num_train_epochs=1, default_n_components=4, row_fraction=0.5, col_fraction=0.5, nf_level=3):
     if decomposer_name:
@@ -235,7 +236,7 @@ def main(
     col_fraction: float = 0.5,
     nf_level: int = 3,
 ):
-    dataset_names = dataset_name.split(',')
+    dataset_names = dataset_name
     available_dataset_names = get_available_demos(modality='single_table')['dataset_name'].tolist()
     assert all(dataset_name in available_dataset_names for dataset_name in dataset_names), \
         f"Invalid dataset name {dataset_name}. Available dataset names are: {available_dataset_names}"
@@ -258,9 +259,10 @@ def main(
     elif to_save_decomposition_name == "NFDecomposition":
         to_save_decomposition_name += f"_nf_{nf_level}"
     else:
-        to_save_decomposition_name += f"_n_{default_n_components}"
+        if to_save_decomposition_name in ["NMFDecomposition", "PCADecomposition", "SVDDecomposition", "ICADecomposition", "FactorAnalysisDecomposition", "DictionaryLearningDecomposition"]:
+            to_save_decomposition_name += f"_n_{default_n_components}"
 
-    save_path = Path("benchmark_results") / dataset_name / (decomposer_name or "no_decomposition") / synthesizer_name
+    save_path = Path("benchmark_results") / (to_save_decomposition_name) / synthesizer_name
     save_path.mkdir(parents=True, exist_ok=True)
     benchmark_single_synthesizer(
         datasets=dataset_names,
