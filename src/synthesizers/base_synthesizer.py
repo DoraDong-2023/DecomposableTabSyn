@@ -36,7 +36,9 @@ class TableSynthesizer(BaseSynthesis):
             self.synthesizer = synthesizer_class.load(filepath)
         else:
             self.synthesizer = synthesizer_class(metadata, **synthesizer_config)
+            
     def fit(self, data: pd.DataFrame):
         self.synthesizer.fit(data)
+        
     def sample(self, num_rows: int) -> pd.DataFrame:
         return self.synthesizer.sample(num_rows)

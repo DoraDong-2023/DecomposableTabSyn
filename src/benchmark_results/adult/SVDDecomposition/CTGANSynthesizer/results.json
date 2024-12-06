@@ -1,0 +1,170 @@
+{
+    "adult": [
+        {
+            "Dataset": "adult",
+            "Num Rows": 1000,
+            "Synthesizer": "CTGANSynthesizer",
+            "Fit Time (s)": 7.285594701766968,
+            "Sample Time (s)": 0.29886460304260254,
+            "Overall Score": 0.39226744778275935,
+            "Properties": {
+                "Column Shapes": 0.4862349725995572,
+                "Column Pair Trends": 0.2982999229659615
+            },
+            "Details": {
+                "KSComplement": {
+                    "age": 0.43000000000000005,
+                    "fnlwgt": 0.536,
+                    "education-num": 0.42000000000000004,
+                    "capital-gain": 0.19399999999999995,
+                    "capital-loss": 0.30700000000000005,
+                    "hours-per-week": 0.41600000000000004
+                },
+                "TVComplement": {
+                    "workclass": 0.36771163575042165,
+                    "education": 0.5044383561643837,
+                    "marital-status": 0.4906675900277009,
+                    "occupation": 0.724243042671614,
+                    "relationship": 0.7348888888888889,
+                    "race": 0.4745942028985508,
+                    "sex": 0.9197670250896057,
+                    "native-country": 0.14942857142857136,
+                    "label": 0.6247852760736197
+                },
+                "workclass": {
+                    "age": "ContingencySimilarity"
+                },
+                "fnlwgt": {
+                    "age": "CorrelationSimilarity",
+                    "workclass": "ContingencySimilarity"
+                },
+                "education": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity"
+                },
+                "education-num": {
+                    "age": "CorrelationSimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "CorrelationSimilarity",
+                    "education": "ContingencySimilarity"
+                },
+                "marital-status": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity"
+                },
+                "occupation": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity"
+                },
+                "relationship": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity"
+                },
+                "race": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity"
+                },
+                "sex": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity"
+                },
+                "capital-gain": {
+                    "age": "CorrelationSimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "CorrelationSimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "CorrelationSimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity",
+                    "sex": "ContingencySimilarity"
+                },
+                "capital-loss": {
+                    "age": "CorrelationSimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "CorrelationSimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "CorrelationSimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity",
+                    "sex": "ContingencySimilarity",
+                    "capital-gain": "CorrelationSimilarity"
+                },
+                "hours-per-week": {
+                    "age": "CorrelationSimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "CorrelationSimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "CorrelationSimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity",
+                    "sex": "ContingencySimilarity",
+                    "capital-gain": "CorrelationSimilarity",
+                    "capital-loss": "CorrelationSimilarity"
+                },
+                "native-country": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity",
+                    "sex": "ContingencySimilarity",
+                    "capital-gain": "ContingencySimilarity",
+                    "capital-loss": "ContingencySimilarity",
+                    "hours-per-week": "ContingencySimilarity"
+                },
+                "label": {
+                    "age": "ContingencySimilarity",
+                    "workclass": "ContingencySimilarity",
+                    "fnlwgt": "ContingencySimilarity",
+                    "education": "ContingencySimilarity",
+                    "education-num": "ContingencySimilarity",
+                    "marital-status": "ContingencySimilarity",
+                    "occupation": "ContingencySimilarity",
+                    "relationship": "ContingencySimilarity",
+                    "race": "ContingencySimilarity",
+                    "sex": "ContingencySimilarity",
+                    "capital-gain": "ContingencySimilarity",
+                    "capital-loss": "ContingencySimilarity",
+                    "hours-per-week": "ContingencySimilarity",
+                    "native-country": "ContingencySimilarity"
+                }
+            }
+        }
+    ]
+}
