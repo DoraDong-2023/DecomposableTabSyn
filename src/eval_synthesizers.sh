@@ -18,7 +18,7 @@ num_test_samples=2000
 num_train_epochs=5
 seed=42
 for num_train_samples in 1000 5000 10000 50000 100000; do
-    for synthesizer_name in "TVAESynthesizer" "REaLTabFormer"; do
+    for synthesizer_name in "TVAESynthesizer"; do
         for decomposer_name in "no_decomposition" "PCADecomposition" "TruncateDecomposition"; do
             echo "Running experiment with dataset_name: $dataset_name, synthesizer_name: $synthesizer_name, num_train_samples: $num_train_samples, num_test_samples: $num_test_samples, num_train_epochs: $num_train_epochs, seed: $seed, decomposer_name: $decomposer_name"
             python eval_synthesizer.py --dataset_name $dataset_name --synthesizer_name $synthesizer_name --num_train_samples $num_train_samples --num_test_samples $num_test_samples --num_train_epochs $num_train_epochs --seed $seed --decomposer_name $decomposer_name

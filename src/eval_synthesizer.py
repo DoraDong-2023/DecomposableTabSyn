@@ -116,7 +116,8 @@ def evaluate_single_table_metrics(real_data, synthetic_data, metadata, save_path
             metrics[metric_name] = None
     # table-wide metrics
     metrics['TableStructure'] = TableStructure.compute(real_data, synthetic_data)
-    metrics['NewRowSynthesis'] = NewRowSynthesis.compute(real_data, synthetic_data, list(metadata.tables.values())[0].to_dict())
+    # metrics['NewRowSynthesis'] = NewRowSynthesis.compute(real_data, synthetic_data, list(metadata.tables.values())[0].to_dict())
+    metrics['NewRowSynthesis'] = None
     
     summary = {
         "Overall Score": score,
@@ -173,8 +174,8 @@ def benchmark_single_synthesizer(datasets, new_synthesizer_fn, num_samples=1000,
         dataset_save_path = save_path / dataset_name
         dataset_save_path.mkdir(parents=True, exist_ok=True)
         # Load dataset
-        real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
-        num_columns = len(real_data.columns)
+        real_data, metadata = None, None
+        # num_columns = len(real_data.columns)
         print(f"Running experiments on {dataset_name} dataset ...")
         for num_rows in row_sizes:
             experiment_save_path = dataset_save_path / f"{num_rows}_train_{num_samples}_test"
@@ -196,6 +197,8 @@ def benchmark_single_synthesizer(datasets, new_synthesizer_fn, num_samples=1000,
                     print(f"   - {k}: {v}")
                 print(" - Metrics Overall Score:", eval_results["Metrics Overall Score"])
                 continue
+            if real_data is None:
+                real_data, metadata = download_demo(modality='single_table', dataset_name=dataset_name)
             data = real_data.sample(num_rows, random_state=seed)
             print(f"Using {num_rows} rows from dataset {dataset_name}")
             
