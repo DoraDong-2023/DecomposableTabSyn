@@ -1,119 +1,170 @@
 import os
-import re
+import json
 import pandas as pd
+import re
 
-def extract_experiment_metrics(file_path):
+
+def safe_extract_n_components(decomposer):
+    """Extract numeric components from decomposer if present."""
+    match = re.search(r"_n_(\d+)", decomposer)
+    return int(match.group(1)) if match else None
+
+
+def parse_decomposer(decomposer):
     """
-    Extract metrics, settings, and time from the experiment log file. Includes error handling.
-
-    :param file_path: Path to the log file.
-    :return: DataFrame with extracted data.
+    Parse decomposer to a normalized form and extract key components.
     """
-    with open(file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
+    if decomposer == "no_decomposition":
+        return {"base": "no_decomposition", "n_components": None}
+    if "_" in decomposer:
+        base, *details = decomposer.split('_')
+        n_components = safe_extract_n_components(decomposer)
+        return {"base": base, "n_components": n_components}
+    return {"base": decomposer, "n_components": None}
 
-    # Split content into experiment blocks
-    experiment_blocks = re.split(r"Running experiment with", content)
-    experiment_data = []
 
-    for block in experiment_blocks[1:]:  # Skip the first part (not an experiment block)
-        # Initialize a dictionary to store the experiment result
-        result = {
-            "Dataset Name": None,
-            "Synthesizer Name": None,
-            "Num Train Samples": None,
-            "Num Test Samples": None,
-            "Num Train Epochs": None,
-            "Seed": None,
-            "Decomposer Name": None,
-            "Fitting Time": None,
-            "Decomposition Time": None,
-            "Sampling Time": None,
-            "Overall Score": None,
-            "Column Shapes": None,
-            "Column Pair Trends": None,
-            "Boundary Adherence": None,
-            "Range Coverage": None,
-            "Category Coverage": None,
-            "KS Complement": None,
-            "TV Complement": None,
-            "Statistic Similarity": None,
-            "Correlation Similarity": None,
-            "Contingency Similarity": None,
-            "Table Structure": None,
-            "New Row Synthesis": None,
-            "Metrics Overall Score": None,
-            "Status": "Success"
-        }
+def is_experiment_1(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples):
+    """Experiment 1: Fixed conditions."""
+    return (
+        dataset == "covtype" and
+        synthesizer in [
+            "CTGANSynthesizer", "TVAESynthesizer", "CopulaGANSynthesizer", "GaussianCopulaSynthesizer",
+            "REaLTabFormer", "Tabula"
+        ] and
+        parsed_decomposer["base"] in [
+            "no_decomposition", "PCADecomposition", "SVDDecomposition", "FactorAnalysisDecomposition",
+            "ICADecomposition", "TruncateDecomposition"
+        ] and
+        (
+            parsed_decomposer["base"] != "PCADecomposition" or 
+            parsed_decomposer["n_components"] == 8  # Only check for PCADecomposition
+        ) and
+        num_train_samples == 5000 and num_test_samples == 2000
+    )
 
-        # Extract settings
-        dataset_match = re.search(r"dataset_name: (\w+)", block)
-        synthesizer_match = re.search(r"synthesizer_name: (\w+)", block)
-        train_samples_match = re.search(r"num_train_samples: (\d+)", block)
-        test_samples_match = re.search(r"num_test_samples: (\d+)", block)
-        train_epochs_match = re.search(r"num_train_epochs: (\d+)", block)
-        seed_match = re.search(r"seed: (\d+)", block)
-        decomposer_match = re.search(r"decomposer_name: (\w+)", block)
 
-        result["Dataset Name"] = dataset_match.group(1) if dataset_match else None
-        result["Synthesizer Name"] = synthesizer_match.group(1) if synthesizer_match else None
-        result["Num Train Samples"] = int(train_samples_match.group(1)) if train_samples_match else None
-        result["Num Test Samples"] = int(test_samples_match.group(1)) if test_samples_match else None
-        result["Num Train Epochs"] = int(train_epochs_match.group(1)) if train_epochs_match else None
-        result["Seed"] = int(seed_match.group(1)) if seed_match else None
-        result["Decomposer Name"] = decomposer_match.group(1) if decomposer_match else None
+def is_experiment_2(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples):
+    """Experiment 2: Train samples vary."""
+    return (
+        dataset == "covtype" and
+        synthesizer in ["TVAESynthesizer", "REaLTabFormer"] and
+        parsed_decomposer["base"] in ["no_decomposition", "PCADecomposition", "TruncateDecomposition"] and
+        (
+            parsed_decomposer["base"] != "PCADecomposition" or
+            parsed_decomposer["n_components"] == 8  # Only check for PCADecomposition
+        ) and
+        num_test_samples == 2000
+    )
 
-        # Extract time-related metrics
-        fit_time_match = re.search(r"Fitting Time taken: ([\d.]+)s", block)
-        decomp_time_match = re.search(r"Decomposition Time taken: ([\d.]+)s", block)
-        sample_time_match = re.search(r"Sampling Time taken: ([\d.]+)s", block)
 
-        result["Fitting Time"] = float(fit_time_match.group(1)) if fit_time_match else None
-        result["Decomposition Time"] = float(decomp_time_match.group(1)) if decomp_time_match else None
-        result["Sampling Time"] = float(sample_time_match.group(1)) if sample_time_match else None
+def is_experiment_3(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples):
+    """Experiment 3: Test samples vary."""
+    return (
+        dataset == "covtype" and
+        synthesizer in ["TVAESynthesizer", "REaLTabFormer"] and
+        parsed_decomposer["base"] in ["no_decomposition", "PCADecomposition", "TruncateDecomposition"] and
+        (
+            parsed_decomposer["base"] != "PCADecomposition" or
+            parsed_decomposer["n_components"] == 8  # Only check for PCADecomposition
+        ) and
+        num_train_samples == 5000
+    )
 
-        # Extract quality report metrics
-        overall_score_match = re.search(r"Overall Score: ([\d.]+)", block)
-        col_shapes_match = re.search(r"Column Shapes: ([\d.]+)", block)
-        col_pair_trends_match = re.search(r"Column Pair Trends: ([\d.]+)", block)
 
-        result["Overall Score"] = float(overall_score_match.group(1)) if overall_score_match else None
-        result["Column Shapes"] = float(col_shapes_match.group(1)) if col_shapes_match else None
-        result["Column Pair Trends"] = float(col_pair_trends_match.group(1)) if col_pair_trends_match else None
+def is_experiment_4(dataset, synthesizer, parsed_decomposer):
+    """Experiment 4: Different datasets."""
+    return (
+        dataset in ["asia", "adult", "insurance", "alarm", "covtype", "mnist12"] and
+        synthesizer in ["TVAESynthesizer", "REaLTabFormer"] and
+        parsed_decomposer["base"] in ["no_decomposition", "PCADecomposition"] and
+        (
+            parsed_decomposer["base"] != "PCADecomposition" or
+            parsed_decomposer["n_components"] == 8  # Only check for PCADecomposition
+        )
+    )
 
-        # Extract detailed metrics
-        metrics = {
-            "Boundary Adherence": r"BoundaryAdherence: ([\d.]+)",
-            "Range Coverage": r"RangeCoverage: ([\d.]+)",
-            "Category Coverage": r"CategoryCoverage: (\w+)",
-            "KS Complement": r"KSComplement: ([\d.]+)",
-            "TV Complement": r"TVComplement: ([\d.]+)",
-            "Statistic Similarity": r"StatisticSimilarity: (\w+)",
-            "Correlation Similarity": r"CorrelationSimilarity: ([\d.]+)",
-            "Contingency Similarity": r"ContingencySimilarity: ([\d.]+)",
-            "Table Structure": r"TableStructure: ([\d.]+)",
-            "New Row Synthesis": r"NewRowSynthesis: ([\d.]+)",
-            "Metrics Overall Score": r"Metrics Overall Score: ([\d.]+)"
-        }
 
-        for key, pattern in metrics.items():
-            match = re.search(pattern, block)
-            result[key] = float(match.group(1)) if match and match.group(1) != "None" else None
+def is_experiment_5(dataset, synthesizer, parsed_decomposer):
+    """Experiment 5: Allow PCADecomposition with all n_components."""
+    return (
+        dataset == "covtype" and
+        synthesizer in ["TVAESynthesizer", "REaLTabFormer"] and
+        parsed_decomposer["base"] == "PCADecomposition"
+    )
 
-        # Check for errors
-        if "Traceback" in block:
-            result["Status"] = "Failed"
 
-        experiment_data.append(result)
+def extract_results_with_labels(base_dir, output_csv):
+    """
+    Extract metrics from results.json files and assign experiment labels.
+    """
+    results = []
+    for root, _, files in os.walk(base_dir):
+        for file in files:
+            if file == "results.json":
+                file_path = os.path.join(root, file)
 
-    # Convert results to DataFrame
-    return pd.DataFrame(experiment_data)
+                path_parts = root.split(os.sep)
+                decomposer = path_parts[-3] if len(path_parts) > 2 else "Unknown"
+                synthesizer = path_parts[-2] if len(path_parts) > 1 else "Unknown"
+                dataset = path_parts[-1] if len(path_parts) > 0 else "Unknown"
+
+                parsed_decomposer = parse_decomposer(decomposer)
+
+                with open(file_path, 'r') as f:
+                    try:
+                        data = json.load(f)
+                        for entry in data:
+                            num_train_samples = entry.get("Num Rows", 5000)
+                            num_test_samples = entry.get("Num Test Samples", 2000)
+
+                            # Handle exclusion based on PCADecomposition and n_components logic
+                            if parsed_decomposer["base"] == "PCADecomposition" and parsed_decomposer["n_components"] != 8:
+                                if not is_experiment_5(dataset, synthesizer, parsed_decomposer):
+                                    continue
+
+                            result = {
+                                "Dataset Name": dataset,
+                                "Synthesizer Name": synthesizer,
+                                "Decomposer Name": decomposer,
+                                "Parsed Decomposer": parsed_decomposer,
+                                "Parsed Decomposer Name": parsed_decomposer['base'],
+                                "Num Train Samples": num_train_samples,
+                                "Num Test Samples": num_test_samples,
+                                "Num Train Epochs": entry.get("Num Train Epochs", 5),
+                                "Overall Score": entry.get("Overall Score", None),
+                                "Fitting Time": entry.get("Fit Time (s)", None),
+                                "Decomposition Time": entry.get("Decomposition Time (s)", None),
+                                "Sampling Time": entry.get("Sample Time (s)", None),
+                                "Column Shapes": entry.get("Properties", {}).get("Column Shapes", None),
+                                "Column Pair Trends": entry.get("Properties", {}).get("Column Pair Trends", None),
+                                "Boundary Adherence": entry.get("Metrics", {}).get("BoundaryAdherence", None),
+                                "Range Coverage": entry.get("Metrics", {}).get("RangeCoverage", None),
+                                "Category Coverage": entry.get("Metrics", {}).get("CategoryCoverage", None),
+                                "KS Complement": entry.get("Metrics", {}).get("KSComplement", None),
+                                "TV Complement": entry.get("Metrics", {}).get("TVComplement", None),
+                                "Statistic Similarity": entry.get("Metrics", {}).get("StatisticSimilarity", None),
+                                "Correlation Similarity": entry.get("Metrics", {}).get("CorrelationSimilarity", None),
+                                "Contingency Similarity": entry.get("Metrics", {}).get("ContingencySimilarity", None),
+                                "Table Structure": entry.get("Metrics", {}).get("TableStructure", None),
+                                "New Row Synthesis": entry.get("Metrics", {}).get("NewRowSynthesis", None),
+                                "Metrics Overall Score": entry.get("Metrics Overall Score", None),
+                                "Experiment1_YN": "Y" if is_experiment_1(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
+                                "Experiment2_YN": "Y" if is_experiment_2(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
+                                "Experiment3_YN": "Y" if is_experiment_3(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
+                                "Experiment4_YN": "Y" if is_experiment_4(dataset, synthesizer, parsed_decomposer) else "N",
+                                "Experiment5_YN": "Y" if is_experiment_5(dataset, synthesizer, parsed_decomposer) else "N",
+                                "Path": file_path,
+                            }
+                            results.append(result)
+                    except Exception as e:
+                        print(f"Error reading {file_path}: {e}")
+
+    df = pd.DataFrame(results)
+    df.to_csv(output_csv, index=False)
+    print(f"Results saved to {output_csv}")
+
 
 # Example usage
-file_path = "eval_synthesizers.txt"  # Replace with your file path
-df = extract_experiment_metrics(file_path)
-
-# Save DataFrame to CSV
-output_csv_path = "experiment_metrics.csv"
-df.to_csv(output_csv_path, index=False)
-print(f"Extracted data saved to {output_csv_path}")
+base_directory = "benchmark_results"
+output_csv_path = "experiment_metrics_with_labels.csv"
+extract_results_with_labels(base_directory, output_csv_path)
