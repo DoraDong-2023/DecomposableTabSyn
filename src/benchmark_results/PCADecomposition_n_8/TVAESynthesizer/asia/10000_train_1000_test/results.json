@@ -1,0 +1,79 @@
+{
+    "Dataset": "asia",
+    "Num Rows": 10000,
+    "Num Test Samples": 1000,
+    "Synthesizer": "TVAESynthesizer",
+    "Fit Time (s)": 11.92884874343872,
+    "Sample Time (s)": 0.28006672859191895,
+    "Decomposition Time (s)": 0.012734413146972656,
+    "Overall Score": null,
+    "Properties": {
+        "Column Shapes": 0.9318814168377824,
+        "Column Pair Trends": 0.8836642857142858
+    },
+    "Metrics": {
+        "BoundaryAdherence": null,
+        "RangeCoverage": null,
+        "CategoryCoverage": 0.6875,
+        "KSComplement": null,
+        "TVComplement": 0.9318814168377824,
+        "StatisticSimilarity": null,
+        "CorrelationSimilarity": null,
+        "ContingencySimilarity": 0.8836642857142858,
+        "TableStructure": 1.0,
+        "NewRowSynthesis": 0.026
+    },
+    "Metrics Overall Score": 0.7058091405104137,
+    "Details": {
+        "TVComplement": {
+            "asia": 0.9907,
+            "tub": 0.99,
+            "smoke": 0.9212513347022587,
+            "lung": 0.9445,
+            "bronc": 0.8875,
+            "either": 0.9351,
+            "xray": 0.8854,
+            "dysp": 0.9006
+        },
+        "ContingencySimilarity": {
+            "asia - tub": 0.9816,
+            "asia - smoke": 0.9053,
+            "asia - lung": 0.9353,
+            "asia - bronc": 0.883,
+            "asia - either": 0.9268,
+            "asia - xray": 0.8778,
+            "asia - dysp": 0.8962,
+            "tub - smoke": 0.9048999999999999,
+            "tub - lung": 0.9351,
+            "tub - bronc": 0.8815,
+            "tub - either": 0.9351,
+            "tub - xray": 0.8851,
+            "tub - dysp": 0.8984,
+            "smoke - lung": 0.9049999999999999,
+            "smoke - bronc": 0.7668999999999999,
+            "smoke - either": 0.8996999999999999,
+            "smoke - xray": 0.8732,
+            "smoke - dysp": 0.7402,
+            "lung - bronc": 0.8634,
+            "lung - either": 0.9351,
+            "lung - xray": 0.8846,
+            "lung - dysp": 0.8909,
+            "bronc - either": 0.8577,
+            "bronc - xray": 0.8309,
+            "bronc - dysp": 0.8152,
+            "either - xray": 0.8843,
+            "either - dysp": 0.8889,
+            "xray - dysp": 0.8605
+        },
+        "CategoryCoverage": {
+            "asia": 0.5,
+            "tub": 0.5,
+            "smoke": 1.0,
+            "lung": 0.5,
+            "bronc": 1.0,
+            "either": 0.5,
+            "xray": 0.5,
+            "dysp": 1.0
+        }
+    }
+}
