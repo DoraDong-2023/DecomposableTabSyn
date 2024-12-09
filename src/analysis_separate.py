@@ -9,8 +9,13 @@ csv_file_path = "experiment_metrics_with_labels.csv"
 output_dir = "images"
 os.makedirs(output_dir, exist_ok=True)
 
+cmap = plt.get_cmap("GnBu")
+colors = [cmap(i / 7) for i in range(8)]
+colors.reverse()
+
 data = pd.read_csv(csv_file_path)
-data_filtered = data[data['Overall Score'].notnull()]  # Filter only rows with valid metrics
+data_filtered = data
+#data_filtered = data[data['Overall Score'].notnull()]  # Filter only rows with valid metrics
 data_filtered['n_components'] = data_filtered['Parsed Decomposer'].apply(lambda x: ast.literal_eval(x).get('n_components', None))
 
 # ---------------------- Experiment 1 ----------------------
@@ -49,9 +54,9 @@ else:
         axes_flat = axes.flatten()
         width = 0.8 / len(decomposers)
 
-        cmap = plt.get_cmap("GnBu")
-        colors = [cmap(i / (len(decomposers) - 1)) for i in range(len(decomposers))]
-        colors.reverse()
+        
+        #colors = [cmap(i / (len(decomposers) - 1)) for i in range(len(decomposers))]
+        #colors.reverse()
 
         for i, metric in enumerate(metrics):
             if i >= total_subplots:
@@ -85,7 +90,7 @@ else:
         fig.text(0.04, 0.5, y_label_suffix, va='center', rotation='vertical', fontsize=12)
 
         handles, labels = axes_flat[0].get_legend_handles_labels()
-        fig.legend(handles, labels, title="Parsed Decomposer Name", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(5, len(decomposers)))
+        fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(6, len(decomposers)))
 
         plt.tight_layout(rect=[0.05, 0.05, 0.95, 0.9])
         plt.savefig(os.path.join(output_dir, f"{file_name_prefix}_clustered_bars.pdf"), bbox_inches='tight')
@@ -129,14 +134,14 @@ def plot_experiment_metrics(data, x_axis_col, x_axis_label, title_prefix, file_n
             sub_data = data[data['Parsed Decomposer Name'] == dec]
             y_values = [sub_data[sub_data[x_axis_col] == x][metric].mean() for x in x_values]
             label = dec if i == 0 else None
-            ax.plot(x_values, y_values, marker='o', label=label)
+            ax.plot(x_values, y_values, marker='o', color=colors[dec_i], label=label)
 
         ax.set_title(metric, fontsize=10)
         if (i // cols) == rows - 1:
             ax.set_xlabel(x_axis_label, fontsize=10)
         if (i % cols) == 0:
             ax.set_ylabel(y_label_suffix, fontsize=10)
-        ax.grid(True)
+        ax.grid(False)
 
     for j in range(metrics_count, total_subplots):
         axes_flat[j].axis('off')
@@ -144,7 +149,7 @@ def plot_experiment_metrics(data, x_axis_col, x_axis_label, title_prefix, file_n
     fig.suptitle(title_prefix, fontsize=16)
 
     handles, labels = axes_flat[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Parsed Decomposer Name", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(5, len(decomposers)))
+    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(6, len(decomposers)))
 
     plt.tight_layout(rect=[0.05, 0.1, 0.95, 0.9])
     plt.savefig(os.path.join(output_dir, f"{file_name_prefix}_{'time' if is_time else 'quality'}_metrics.pdf"))
@@ -160,19 +165,19 @@ def plot_4x1_with_metrics(data, x_axis_col, x_values, title_prefix, file_name_pr
     fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     for i, metric in enumerate(metrics):
         ax = axes[i]
-        for dec in decomposers:
+        for dec_i, dec in enumerate(decomposers):
             sub_data = data[data['Parsed Decomposer Name'] == dec]
             y_values = [sub_data[sub_data[x_axis_col] == x][metric].mean() for x in x_values]
-            ax.plot(x_values, y_values, marker='o', label=dec)
+            ax.plot(x_values, y_values, marker='o', color=colors[dec_i], label=dec)
 
         ax.set_title(metric, fontsize=12)
         ax.set_xlabel(x_axis_col, fontsize=10)
         if i == 0:
             ax.set_ylabel("Value", fontsize=10)
-        ax.grid(True)
+        ax.grid(False)
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Parsed Decomposer Name", loc='lower center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=4)
     fig.suptitle(title_prefix, fontsize=16)
     plt.tight_layout(rect=[0, 0.1, 1, 0.9])
     plt.savefig(os.path.join(output_dir, f"{file_name_prefix}_4x1.pdf"))
@@ -204,24 +209,24 @@ def plot_metrics(data, x_axis_col, x_label, metrics, title, file_name, y_label, 
         if i >= rows * cols:
             break
         ax = axes[i]
-        for dec in decomposers:
+        for dec_i, dec in enumerate(decomposers):
             sub_data = data[data['Parsed Decomposer Name'] == dec]
             y_values = [sub_data[sub_data[x_axis_col] == x][metric].mean() for x in x_values]
-            ax.plot(x_values, y_values, marker='o', label=dec)
+            ax.plot(x_values, y_values, marker='o', color=colors[dec_i], label=dec)
 
         ax.set_title(metric, fontsize=10)
         if i // cols == rows - 1:
             ax.set_xlabel(x_label, fontsize=10)
         if i % cols == 0:
             ax.set_ylabel(y_label, fontsize=10)
-        ax.grid(True)
+        ax.grid(False)
 
     for j in range(len(metrics), rows * cols):
         axes[j].axis('off')
 
     fig.suptitle(title, fontsize=16)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=3)
+    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=4)
     plt.tight_layout(rect=[0, 0.1, 1, 0.9])
     plt.savefig(os.path.join(output_dir, f"{file_name}_{metric_type}.pdf"))
     plt.close()
@@ -236,19 +241,19 @@ def plot_aggregated(data, x_axis_col, x_values, metrics, title, file_name):
 
     for i, metric in enumerate(metrics):
         ax = axes[i]
-        for dec in decomposers:
+        for dec_i, dec in enumerate(decomposers):
             sub_data = data[data['Parsed Decomposer Name'] == dec]
             y_values = [sub_data[sub_data[x_axis_col] == x][metric].mean() for x in x_values]
-            ax.plot(x_values, y_values, marker='o', label=dec)
+            ax.plot(x_values, y_values, marker='o', color=colors[dec_i], label=dec)
 
         ax.set_title(metric, fontsize=10)
         ax.set_xlabel(x_axis_col, fontsize=10)
         if i == 0:
             ax.set_ylabel("Value", fontsize=10)
-        ax.grid(True)
+        ax.grid(False)
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=4)
     fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0.1, 1, 0.9])
     plt.savefig(os.path.join(output_dir, f"{file_name}_aggregated.pdf"))
@@ -265,17 +270,17 @@ if not exp2_data.empty:
 
     plot_metrics(
         exp2_data, 'Num Train Samples', "Training Samples",
-        quality_metrics, "Experiment 2: Quality Metrics", "experiment2", "Quality",
+        quality_metrics, "Quality Metrics", "experiment2", "Quality",
         (3, 3), train_samples, "quality"
     )
     plot_metrics(
         exp2_data, 'Num Train Samples', "Training Samples",
-        time_metrics, "Experiment 2: Time Metrics", "experiment2", "Time (s)",
-        (1, 3), train_samples, "time"
+        time_metrics, "Time Metrics", "experiment2", "Time (s)",
+        (3,1), train_samples, "time"
     )
     plot_aggregated(
         exp2_data, 'Num Train Samples', train_samples,
-        ["Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"], "Experiment 2: Aggregated Metrics", "experiment2"
+        ["Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"], "Aggregated Metrics", "experiment2"
     )
 
 
@@ -290,21 +295,28 @@ if not exp3_data.empty:
 
     plot_metrics(
         exp3_data, 'Num Test Samples', "Testing Samples",
-        quality_metrics, "Experiment 3: Quality Metrics", "experiment3", "Quality",
+        quality_metrics, "Quality Metrics", "experiment3", "Quality",
         (3, 3), test_samples, "quality"
     )
     plot_metrics(
         exp3_data, 'Num Test Samples', "Testing Samples",
-        time_metrics, "Experiment 3: Time Metrics", "experiment3", "Time (s)",
-        (1, 3), test_samples, "time"
+        time_metrics, "Time Metrics", "experiment3", "Time (s)",
+        (3,1), test_samples, "time"
     )
     plot_aggregated(
         exp3_data, 'Num Test Samples', test_samples,
-        ["Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"], "Experiment 3: Aggregated Metrics", "experiment3"
+        ["Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"], "Aggregated Metrics", "experiment3"
     )
 
 # ---------------------- Experiment 4 ----------------------
-exp4_data = data_filtered[data_filtered['Experiment4_YN'] == 'Y']
+#exp4_filtered = data_filtered[(data_filtered['Experiment4_YN'] == 'Y')]
+exp4_filtered = data_filtered
+exp4_filtered = exp4_filtered[exp4_filtered['Num Train Samples'] == 5000]
+exp4_filtered = exp4_filtered[exp4_filtered['Num Test Samples'] == 2000]
+exp4_filtered = exp4_filtered[exp4_filtered['Synthesizer Name'] == 'REaLTabFormer']
+exp4_filtered = exp4_filtered[exp4_filtered['Parsed Decomposer Name'].isin(['no_decomposition', 'PCADecomposition'])]
+exp4_filtered = exp4_filtered[exp4_filtered['Decomposer Name'].isin(['no_decomposition', 'PCADecomposition_n_8'])]
+print(exp4_filtered)
 dataset_columns = {
     "asia": 8,
     "adult": 14,
@@ -313,28 +325,133 @@ dataset_columns = {
     "covtype": 54,
     "mnist12": 12
 }
-if not exp4_data.empty:
-    datasets = sorted(exp4_data['Dataset Name'].unique(), key=lambda x: dataset_columns[x])
-    quality_metrics = ["Overall Score", "Column Shapes", "Column Pair Trends",
+
+exp4_filtered_decomposers = ["no_decomposition", "PCADecomposition"]
+#exp4_filtered = exp4_filtered[exp4_filtered['Parsed Decomposer Name'].isin(desired_decomposers)]
+#print(exp4_filtered)
+
+unique_datasets = ['asia', 'covtype', 'alarm', 'adult', 'mnist12', 'insurance']
+
+def plot_clustered_bars_exp4_inverted(agg_data, metrics, title_prefix, file_name_prefix, y_label_suffix="Value"):
+    decomposers_list = exp4_filtered_decomposers
+    x = np.arange(len(decomposers_list))  # 两个decomposer对应两个x位置
+    width = 0.8 / len(unique_datasets)    # 每个decomposer处插入多个dataset的bar
+
+    # 固定为1行3列布局
+    rows, cols = (3, 3)
+    total_subplots = rows * cols
+
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
+    # 当rows=1时，axes为一维数组
+    axes = axes.flatten()
+
+    for i, metric in enumerate(metrics):
+        if i >= total_subplots:
+            break  # 超过3个metric的就不绘制了
+        ax = axes[i]
+
+        # 构建数据矩阵
+        metric_data = []
+        for dec in decomposers_list:
+            row = []
+            for ds in unique_datasets:
+                val = agg_data[(agg_data['Dataset Name'] == ds) & (agg_data['Parsed Decomposer Name'] == dec)][metric].mean()
+                row.append(val if pd.notnull(val) else 0)
+            metric_data.append(row)
+        metric_data = np.array(metric_data)
+
+        for j, ds in enumerate(unique_datasets):
+            label = ds if i == 0 else None
+            ax.bar(x + j * width, metric_data[:, j], width, color=colors[j], label=label)
+
+        ax.set_title(metric, fontsize=10)
+        ax.set_xticks(x + width * (len(unique_datasets) - 1) / 2)
+        ax.set_xticklabels(decomposers_list, rotation=45, ha='right', fontsize=8)
+
+        if i == 0:
+            ax.set_ylabel(y_label_suffix, fontsize=9)
+
+    # 隐藏多余的子图（如果metrics少于3个，不需要，但无妨）
+    for j in range(len(metrics), total_subplots):
+        axes[j].axis('off')
+
+    fig.suptitle(title_prefix, fontsize=14)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, title="Dataset", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(6, len(unique_datasets)))
+    plt.tight_layout(rect=[0.05, 0.05, 0.95, 0.9])
+    plt.savefig(os.path.join(output_dir, f"{file_name_prefix}_1x3_clustered_bars.pdf"), bbox_inches='tight')
+    plt.close()
+
+exp4_agg = exp4_filtered.groupby(["Dataset Name", "Parsed Decomposer Name"]).mean(numeric_only=True).reset_index()
+
+quality_metrics = ["Overall Score", "Column Shapes", "Column Pair Trends",
                    "Boundary Adherence", "Range Coverage", "KS Complement",
                    "TV Complement", "Correlation Similarity", "Contingency Similarity"]
-    time_metrics = ["Fitting Time", "Sampling Time", "Decomposition Time"]
+time_metrics = ["Fitting Time", "Sampling Time", "Decomposition Time"]
 
-    plot_metrics(
-        exp4_data, 'Dataset Name', "Datasets (ordered by column count)",
-        quality_metrics, "Experiment 4: Quality Metrics", "experiment4", "Quality",
-        (3, 3), datasets, "quality"
-    )
-    plot_metrics(
-        exp4_data, 'Dataset Name', "Datasets (ordered by column count)",
-        time_metrics, "Experiment 4: Time Metrics", "experiment4", "Time (s)",
-        (1, 3), datasets, "time"
-    )
-    plot_aggregated(
-        exp4_data, 'Dataset Name', datasets,
-        ["Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"], "Experiment 4: Aggregated Metrics", "experiment4"
-    )
+available_cols = exp4_agg.columns
+time_metrics = [m for m in time_metrics if m in available_cols]
 
+def plot_4x1_with_metrics_exp4(data, metrics, title_prefix, file_name_prefix, y_label_suffix="Value"):
+    decomposers_list = exp4_filtered_decomposers
+    x = np.arange(len(decomposers_list))  
+    width = 0.8 / len(unique_datasets)
+
+    # 固定为1行4列布局
+    rows, cols = (1, 4)
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
+
+    for i, metric in enumerate(metrics):
+        if i >= cols:  # 超过4个不绘制
+            break
+        ax = axes[i]
+
+        # 构建数据矩阵
+        metric_data = []
+        for dec in decomposers_list:
+            row = []
+            for ds in unique_datasets:
+                val = data[(data['Dataset Name'] == ds) & (data['Parsed Decomposer Name'] == dec)][metric].mean()
+                row.append(val if pd.notnull(val) else 0)
+            metric_data.append(row)
+        metric_data = np.array(metric_data)
+
+        for j, ds in enumerate(unique_datasets):
+            label = ds if i == 0 else None
+            ax.bar(x + j * width, metric_data[:, j], width, color=colors[j], label=label)
+
+        ax.set_title(metric, fontsize=10)
+        ax.set_xticks(x + width * (len(unique_datasets) - 1) / 2)
+        ax.set_xticklabels(decomposers_list, rotation=45, ha='right', fontsize=8)
+
+        if i == 0:
+            ax.set_ylabel(y_label_suffix, fontsize=9)
+
+    fig.suptitle(title_prefix, fontsize=14)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, title="Dataset", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=min(6, len(unique_datasets)))
+    plt.tight_layout(rect=[0.05, 0.05, 0.95, 0.9])
+    plt.savefig(os.path.join(output_dir, f"{file_name_prefix}_4x1_clustered_bars.pdf"), bbox_inches='tight')
+    plt.close()
+
+# 绘图调用
+plot_clustered_bars_exp4_inverted(exp4_agg, quality_metrics, 
+                                  "Experiment 4: Quality (no_decomposition vs PCADecomposition, Train=5000, Test=2000)", 
+                                  "experiment4_inverted_quality_5000_2000", 
+                                  "(Quality)")
+
+plot_clustered_bars_exp4_inverted(exp4_agg, time_metrics, 
+                                  "Experiment 4: Time (no_decomposition vs PCADecomposition, Train=5000, Test=2000)", 
+                                  "experiment4_inverted_time_5000_2000", 
+                                  "(Time)")
+agg_metrics = ["Metrics Overall Score", "Fitting Time", "Sampling Time", "Decomposition Time"]
+plot_4x1_with_metrics_exp4(
+    exp4_agg,
+    agg_metrics,
+    "Experiment 4: Aggregated Metrics (no_decomposition vs PCADecomposition, Train=5000, Test=2000)",
+    "experiment4_aggregated_5000_2000",
+    y_label_suffix="Value"
+)
 # ---------------------- Experiment 5 ----------------------
 import ast
 exp5_data = data_filtered[(data_filtered['Experiment5_YN'] == 'Y')]
@@ -394,7 +511,7 @@ def plot_experiment5_time_with_consistent_layout(data, title_prefix, file_name_p
         for idx, syn in enumerate(synthesizers):
             sub_data = data[data['Synthesizer Name'] == syn]
             y_values = [sub_data[sub_data['n_components'] == c][metric].mean() for c in n_components]
-            ax.plot(n_components, y_values, marker='o', label=syn)
+            ax.plot(n_components, y_values, marker='o', color=colors[idx], label=syn)
 
         # Add baselines for each synthesizer
         for idx, (syn, baseline_values) in enumerate(baselines.items()):
@@ -414,7 +531,7 @@ def plot_experiment5_time_with_consistent_layout(data, title_prefix, file_name_p
     handles += baseline_handles
     labels += [f"Baseline ({syn})" for syn in baselines.keys()]
 
-    fig.legend(handles, labels, title="Legend", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=3)
+    fig.legend(handles, labels, title="Legend", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=4)
 
     # Add an overall title and adjust layout
     fig.suptitle(title_prefix, fontsize=16)
@@ -427,7 +544,7 @@ def plot_experiment5_time_with_consistent_layout(data, title_prefix, file_name_p
 # Call the function to generate time metrics
 plot_experiment5_time_with_consistent_layout(
     exp5_data,
-    "Experiment 5: Time Metrics with Consistent Layout",
+    "Time Metrics with Consistent Layout",
     "experiment5_time_consistent"
 )
 
@@ -460,10 +577,10 @@ def plot_experiment5_quality_with_baselines(data, title_prefix, file_name_prefix
         ax = axes_flat[i]
 
         # Plot the quality metrics for each synthesizer
-        for syn in synthesizers:
+        for dec_i, syn in enumerate(synthesizers):
             sub_data = data[data['Synthesizer Name'] == syn]
             y_values = [sub_data[sub_data['n_components'] == c][metric].mean() for c in n_components]
-            ax.plot(n_components, y_values, marker='o', label=syn)
+            ax.plot(n_components, y_values, marker='o', color=colors[dec_i], label=syn)
 
         # Add baselines for each synthesizer
         for idx, (syn, baseline_values) in enumerate(baselines.items()):
@@ -502,7 +619,7 @@ def plot_experiment5_quality_with_baselines(data, title_prefix, file_name_prefix
 
 # Call the updated function
 plot_experiment5_quality_with_baselines(exp5_data, 
-                                        "Experiment 5: Quality Metrics with Two Baselines", 
+                                        "Quality Metrics with Two Baselines", 
                                         "experiment5_quality_with_two_baselines")
 
 print("Experiment 5 quality metrics plot with baseline has been generated and saved.")
@@ -528,10 +645,10 @@ def plot_4x1_with_metrics_exp5(data, title_prefix, file_name_prefix):
 
     for i, metric in enumerate(metrics):
         ax = axes[i]
-        for syn in synthesizers:
+        for dec_i, syn in enumerate(synthesizers):
             sub_data = data[data['Synthesizer Name'] == syn]
             y_values = [sub_data[sub_data['n_components'] == c][metric].mean() for c in n_components]
-            ax.plot(n_components, y_values, marker='o', label=syn)
+            ax.plot(n_components, y_values, marker='o', color=colors[dec_i], label=syn)
 
         # Add baselines for each synthesizer
         for idx, (syn, baseline_values) in enumerate(baselines.items()):
@@ -581,7 +698,7 @@ def plot_4x1_with_metrics_exp1(data, title_prefix, file_name_prefix):
         # Plot metrics for each decomposer
         for j, dec in enumerate(decomposers):
             values = aggregated_data[aggregated_data['Parsed Decomposer Name'] == dec][metric].values
-            ax.bar(x + j * width, values, width, label=dec)
+            ax.bar(x + j * width, values, width, color=colors[j], label=dec)
 
         ax.set_title(metric, fontsize=12)
         ax.set_xticks(x + width * (len(decomposers) - 1) / 2)
@@ -592,7 +709,7 @@ def plot_4x1_with_metrics_exp1(data, title_prefix, file_name_prefix):
 
     # Add a legend
     handles, labels = ax.get_legend_handles_labels()
-    fig.legend(handles, labels, title="Parsed Decomposer Name", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=len(decomposers))
+    fig.legend(handles, labels, title="Decomposer", loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=len(decomposers))
 
     # Add an overall title and adjust layout
     fig.suptitle(title_prefix, fontsize=16)
@@ -603,11 +720,11 @@ def plot_4x1_with_metrics_exp1(data, title_prefix, file_name_prefix):
     plt.close()
 
 # Generate the 4x1 layout plot for Experiment 1
-plot_4x1_with_metrics_exp1(exp1_data, "Experiment 1: 4x1 Metrics Layout", "experiment1_4x1")
+plot_4x1_with_metrics_exp1(exp1_data, "Aggregated Metrics", "experiment1_4x1")
 
 # Generate 4x1 layout for Experiment 5
 plot_4x1_with_metrics_exp5(exp5_data, 
-                           "Experiment 5: 4x1 Layout with Two Baselines", 
+                           "Aggregated Metrics", 
                            "experiment5_4x1_with_two_baselines")
 
 print("4x1 metrics layout plots for Experiments 1 and 5 have been generated and saved.")

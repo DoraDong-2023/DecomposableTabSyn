@@ -84,12 +84,12 @@ def is_experiment_4(dataset, synthesizer, parsed_decomposer):
     )
 
 
-def is_experiment_5(dataset, synthesizer, parsed_decomposer):
+def is_experiment_5(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples):
     """Experiment 5: Allow PCADecomposition with all n_components."""
     return (
         dataset == "covtype" and
         synthesizer in ["TVAESynthesizer", "REaLTabFormer"] and
-        parsed_decomposer["base"] == "PCADecomposition"
+        parsed_decomposer["base"] == "PCADecomposition" and num_train_samples == 5000 and num_test_samples == 2000
     )
 
 
@@ -104,24 +104,46 @@ def extract_results_with_labels(base_dir, output_csv):
                 file_path = os.path.join(root, file)
 
                 path_parts = root.split(os.sep)
-                decomposer = path_parts[-3] if len(path_parts) > 2 else "Unknown"
-                synthesizer = path_parts[-2] if len(path_parts) > 1 else "Unknown"
-                dataset = path_parts[-1] if len(path_parts) > 0 else "Unknown"
+                num_train_samples = None
+                num_test_samples = None
+                last_part = path_parts[-1]
+                match = re.match(r"(\d+)_train_(\d+)_test", last_part)
+                if match:
+                    num_train_samples = int(match.group(1))
+                    num_test_samples = int(match.group(2))
+                    # 如果匹配到该模式，说明最后一层是train/test信息，
+                    # 那么 dataset = path_parts[-2]， synthesizer = path_parts[-3], decomposer = path_parts[-4]
+                    if len(path_parts) >= 4:
+                        dataset = path_parts[-2]
+                        synthesizer = path_parts[-3]
+                        decomposer = path_parts[-4]
+                    else:
+                        # 如果路径不符合预期，fallback
+                        dataset = "Unknown"
+                        synthesizer = "Unknown"
+                        decomposer = "Unknown"
+                else:
+                    # 否则维持原有逻辑
+                    decomposer = path_parts[-3] if len(path_parts) > 2 else "Unknown"
+                    synthesizer = path_parts[-2] if len(path_parts) > 1 else "Unknown"
+                    dataset = path_parts[-1] if len(path_parts) > 0 else "Unknown"
 
                 parsed_decomposer = parse_decomposer(decomposer)
 
                 with open(file_path, 'r') as f:
                     try:
-                        data = json.load(f)
-                        for entry in data:
+                        entry = json.load(f)
+                        data = entry
+                        #for entry in data:
+                        if True:
                             num_train_samples = entry.get("Num Rows", 5000)
                             num_test_samples = entry.get("Num Test Samples", 2000)
 
                             # Handle exclusion based on PCADecomposition and n_components logic
+                            #print(dataset, synthesizer, parsed_decomposer)
                             if parsed_decomposer["base"] == "PCADecomposition" and parsed_decomposer["n_components"] != 8:
-                                if not is_experiment_5(dataset, synthesizer, parsed_decomposer):
+                                if not is_experiment_5(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples):
                                     continue
-
                             result = {
                                 "Dataset Name": dataset,
                                 "Synthesizer Name": synthesizer,
@@ -152,7 +174,7 @@ def extract_results_with_labels(base_dir, output_csv):
                                 "Experiment2_YN": "Y" if is_experiment_2(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
                                 "Experiment3_YN": "Y" if is_experiment_3(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
                                 "Experiment4_YN": "Y" if is_experiment_4(dataset, synthesizer, parsed_decomposer) else "N",
-                                "Experiment5_YN": "Y" if is_experiment_5(dataset, synthesizer, parsed_decomposer) else "N",
+                                "Experiment5_YN": "Y" if is_experiment_5(dataset, synthesizer, parsed_decomposer, num_train_samples, num_test_samples) else "N",
                                 "Path": file_path,
                             }
                             results.append(result)
