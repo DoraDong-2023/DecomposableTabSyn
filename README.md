@@ -6,7 +6,6 @@ This project implements a framework for decomposing and synthesizing tabular dat
 
 ## Repository Structure
 ```bash
-base ❯ tree -L 2
 .
 ├── LICENSE
 ├── README.md
@@ -61,7 +60,7 @@ Generate plots from the extracted metrics and save them into the `images` direct
 ```bash
 python analysis_separate.py
 ```
-The resulting visualizations are stored as PNG files in the `images` folder.
+The resulting visualizations are stored as PDF files in the `images` folder.
 
 ## Key Features
 - Extendable synthesizers and decomposers: Create custom extensions by inheriting from base classifiers in the `synthesizers` and `decomposers` modules.
@@ -69,9 +68,5 @@ The resulting visualizations are stored as PNG files in the `images` folder.
 - Integrated analysis: Extract metrics and visualize results for better interpretability.
 - Modular design: Analyze, synthesize, and decompose tabular data through standalone modules.
 
-## Requirements
-All dependencies are listed in `requirements.txt`. Install them using:
-```bash
-pip install -r requirements.txt
-```
-
+## Acknowledges
+This project leverages functionality provided by the [SDV (Synthetic Data Vault)](https://github.com/sdv-dev/SDV) library and [SDMetrics]((https://github.com/sdv-dev/SDMetrics)) library. The SDV library and SDMetrics offers comprehensive tools for synthetic data generation, including metrics for evaluating synthetic data quality and fidelity.
